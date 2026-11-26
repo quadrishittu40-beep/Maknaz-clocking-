@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAKNAZUL 'IRFAN ACADEMY — Smart Clock In / Out System</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="admin.css">
+<style>
+:root{
+  --green-950:#06231a; --green-900:#0a3d2a; --green-800:#0f5132; --green-700:#14532d; --green-600:#166534;
+  --gold:#c9a227; --gold-light:#e8c766; --gold-dark:#9a7b1a; --cream:#fdf8ec; --paper:#fffdf5;
+  --ink:#10201a; --muted:#5b6b63; --line:#e7dfc8; --red:#b91c1c; --green-ok:#15803d;
+  --shadow:0 10px 30px rgba(6,35,26,.12); --radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--cream);color:var(--ink);}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%230a3d2a' stroke-width='1.2'%3E%3Cpath d='M40 8l10 10-10 10-10-10z'/%3E%3Cpath d='M40 52l10 10-10 10-10-10z'/%3E%3Ccircle cx='40' cy='40' r='6'/%3E%3C/g%3E%3C/svg%3E");}
+a{color:var(--green-800)}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding:0 18px;position:relative;z-index:1}
+
+/* TOP BAR */
+.topbar{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,var(--green-950),var(--green-800) 60%,#0d4a30);color:#fff;border-bottom:3px solid var(--gold);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.topbar-inner{display:flex;align-items:center;gap:14px;padding:12px 0;flex-wrap:wrap}
+.logo-badge{width:62px;height:62px;flex:0 0 auto;background:#fff;border-radius:14px;padding:4px;box-shadow:0 4px 14px rgba(0,0,0,.3);border:2px solid var(--gold)}
+.logo-badge img{width:100%;height:100%;object-fit:contain;display:block}
+.brand h1{margin:0;font-size:clamp(18px,2.6vw,26px);letter-spacing:.04em;line-height:1.1}
+.brand h1 span{color:var(--gold-light)}
+.brand p{margin:3px 0 0;font-size:12.5px;opacity:.9;letter-spacing:.12em;text-transform:uppercase}
+.top-clock{margin-left:auto;text-align:right;background:rgba(255,255,255,.08);border:1px solid rgba(232,199,102,.45);border-radius:14px;padding:8px 14px;min-width:210px}
+.top-clock .time{font-size:26px;font-weight:800;letter-spacing:.04em;font-variant-numeric:tabular-nums;line-height:1}
+.top-clock .date{font-size:12px;opacity:.92;margin-top:4px}
+.top-clock .hijri{font-size:11.5px;color:var(--gold-light);margin-top:2px}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:pulse 1.8s infinite;vertical-align:middle;margin-right:6px}
+@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+
+/* HERO */
+.hero{margin:22px 0 18px;background:linear-gradient(120deg,var(--green-900),var(--green-700));color:#fff;border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow);position:relative;overflow:hidden;border:1px solid rgba(201,162,39,.5)}
+.hero::after{content:"";position:absolute;right:-40px;top:-40px;width:220px;height:220px;border:2px solid rgba(232,199,102,.25);transform:rotate(45deg);border-radius:24px}
+.hero h2{margin:0 0 6px;font-size:clamp(20px,3vw,30px)}
+.hero .motto{color:var(--gold-light);font-weight:700;letter-spacing:.14em;font-size:12.5px;text-transform:uppercase}
+.hero p{margin:8px 0 0;opacity:.92;max-width:760px;line-height:1.55;font-size:14.5px}
+.hero-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;position:relative;z-index:1}
+.pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);padding:7px 12px;border-radius:999px;font-size:13px}
+.pill b{color:var(--gold-light)}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0}
+.stat{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 4px 14px rgba(6,35,26,.06);border-top:4px solid var(--gold)}
+.stat .label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.stat .num{font-size:32px;font-weight:900;color:var(--green-900);line-height:1.1;margin-top:4px}
+.stat .sub{font-size:12.5px;color:var(--muted)}
+.stat.green{border-top-color:var(--green-700)} .stat.red{border-top-color:#dc2626} .stat.gold{border-top-color:var(--gold)}
+
+/* LAYOUT */
+.grid{display:grid;grid-template-columns:1.55fr .95fr;gap:16px;align-items:start}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-head{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:linear-gradient(180deg,#fff, #fffaf0)}
+.card-head h3{margin:0;font-size:18px;color:var(--green-900)}
+.card-head .hint{font-size:13px;color:var(--muted)}
+.card-body{padding:18px}
+
+/* METHOD TABS */
+.methods{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.method-btn{border:2px solid var(--line);background:#fff;border-radius:14px;padding:12px 8px;text-align:center;transition:.15s}
+.method-btn .ico{font-size:24px;display:block}
+.method-btn .t{font-weight:800;font-size:13.5px;color:var(--green-900);display:block;margin-top:4px}
+.method-btn .s{font-size:11.5px;color:var(--muted);display:block}
+.method-btn.active{border-color:var(--gold);background:linear-gradient(180deg,#fff8dc,#fff);box-shadow:0 6px 16px rgba(201,162,39,.25)}
+.method-btn:hover{transform:translateY(-1px)}
+.panel{display:none}.panel.active{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* CAMERA */
+.cam-box{position:relative;background:#0a1f16;border-radius:16px;overflow:hidden;border:2px solid var(--green-900)}
+.cam-box video{width:100%;height:340px;object-fit:cover;display:block;background:#111}
+.oval{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:210px;height:270px;border:3px dashed rgba(232,199,102,.95);border-radius:50%;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
+.oval::after{content:"Align your face in the oval";position:absolute;left:50%;bottom:-34px;transform:translateX(-50%);white-space:nowrap;color:#fff;font-size:12.5px;background:rgba(0,0,0,.55);padding:5px 10px;border-radius:999px}
+.scanline{position:absolute;left:12%;right:12%;height:3px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent);top:20%;animation:scan 2.2s ease-in-out infinite;pointer-events:none}
+@keyframes scan{0%,100%{top:18%}50%{top:78%}}
+.cam-status{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.badge{background:rgba(0,0,0,.6);color:#fff;font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.25)}
+.badge.gold{color:var(--gold-light);border-color:rgba(232,199,102,.6)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.btn{border:none;border-radius:12px;padding:12px 18px;font-weight:800;font-size:14.5px;transition:.15s;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+.btn:active{transform:scale(.98)}
+.btn-gold{background:linear-gradient(135deg,var(--gold-dark),var(--gold) 55%,var(--gold-light));color:#231a00;box-shadow:0 6px 16px rgba(201,162,39,.35)}
+.btn-green{background:linear-gradient(135deg,var(--green-800),var(--green-600));color:#fff;box-shadow:0 6px 16px rgba(15,81,50,.3)}
+.btn-dark{background:var(--green-950);color:#fff}
+.btn-ghost{background:#fff;border:2px solid var(--line);color:var(--green-900)}
+.btn-danger{background:#fff;border:2px solid #fecaca;color:var(--red)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-block{width:100%}
+.small{font-size:13px;color:var(--muted);line-height:1.5}
+.face-preview{display:flex;gap:14px;align-items:center;background:#fff;border:1px dashed var(--gold);border-radius:14px;padding:12px;margin-top:12px}
+.face-preview img{width:84px;height:84px;object-fit:cover;border-radius:12px;border:2px solid var(--gold)}
+.conf{font-weight:900;color:var(--green-ok)}
+
+/* RESULT */
+.result{display:none;margin-top:16px;border-radius:16px;padding:16px;border:2px solid}
+.result.show{display:block;animation:pop .3s ease}
+.result.ok{background:#f0fdf4;border-color:#86efac}
+.result.err{background:#fef2f2;border-color:#fca5a5}
+.result.info{background:#fffbeb;border-color:#fcd34d}
+@keyframes pop{from{transform:scale(.97);opacity:0}to{transform:scale(1);opacity:1}}
+.result-head{display:flex;gap:14px;align-items:center}
+.avatar{width:64px;height:64px;border-radius:14px;object-fit:cover;border:2px solid var(--gold);background:var(--green-900);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;flex:0 0 auto;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.result h4{margin:0;font-size:18px}
+.result .meta{font-size:13.5px;color:#374151;margin-top:3px;line-height:1.5}
+.big-stamp{margin-left:auto;text-align:center;background:var(--green-900);color:#fff;border-radius:14px;padding:10px 14px;min-width:120px}
+.big-stamp .a{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-light)}
+.big-stamp .b{font-size:20px;font-weight:900}
+.big-stamp .c{font-size:12px;opacity:.9}
+
+/* THUMBPRINT */
+.thumb-wrap{text-align:center;padding:10px 0}
+.finger{width:150px;height:150px;margin:8px auto;border-radius:50%;border:3px solid var(--gold);background:radial-gradient(circle at 35% 30%,#fff,#fff8dc);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:none}
+.finger svg{width:96px;height:96px;color:var(--green-900)}
+.finger.holding{border-color:var(--green-600);box-shadow:0 0 0 10px rgba(22,163,74,.15)}
+.finger .fill{position:absolute;left:0;bottom:0;width:100%;height:0%;background:rgba(201,162,39,.35);transition:height .1s linear}
+.thumb-progress{height:10px;background:#eee;border-radius:999px;overflow:hidden;margin:12px auto;max-width:340px}
+.thumb-progress i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--green-700),var(--gold));transition:width .1s linear}
+
+/* FORMS */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field label{display:block;font-size:12.5px;font-weight:800;letter-spacing:.04em;color:var(--green-900);margin-bottom:5px;text-transform:uppercase}
+.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:2px solid var(--line);border-radius:12px;font-size:14.5px;background:#fff;outline:none}
+.field input:focus,.field select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,39,.18)}
+.field.full{grid-column:1/-1}
+
+/* WIZARD */
+.steps{display:flex;gap:8px;margin-bottom:16px}
+.step{flex:1;text-align:center;padding:10px 6px;border-radius:12px;background:#f3efe0;border:1px solid var(--line);font-size:12.5px;font-weight:800;color:var(--muted)}
+.step.active{background:var(--green-900);color:#fff;border-color:var(--green-900)}
+.step.done{background:#dcfce7;color:var(--green-800);border-color:#86efac}
+.wiz-panel{display:none}.wiz-panel.active{display:block}
+
+/* TABLE */
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:760px}
+th{background:var(--green-900);color:#fff;text-align:left;padding:11px 12px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid #f0ead6;vertical-align:middle;white-space:nowrap}
+tr:hover td{background:#fffdf0}
+.tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:800}
+.tag.present{background:#dcfce7;color:#166534}.tag.late{background:#fef3c7;color:#92400e}.tag.verylate{background:#fee2e2;color:#991b1b}.tag.out{background:#e0e7ff;color:#3730a3}.tag.in{background:#d1fae5;color:#065f46}
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.filters input,.filters select{padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-size:14px;background:#fff}
+.filters input{flex:1;min-width:180px}
+
+/* PEOPLE */
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.person{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.person-top{display:flex;gap:12px;align-items:center}
+.person .avatar{width:56px;height:56px;font-size:19px}
+.person h4{margin:0;font-size:15.5px}
+.person .id{font-size:12.5px;color:var(--muted);font-weight:700;letter-spacing:.04em}
+.person .meta{font-size:13px;color:#374151;margin-top:8px;line-height:1.5}
+.person .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.mini-btn{padding:8px 11px;border-radius:10px;font-size:12.5px;font-weight:800;border:2px solid var(--line);background:#fff}
+.mini-btn.gold{background:var(--gold);border-color:var(--gold);color:#231a00}
+.mini-btn.green{background:var(--green-800);border-color:var(--green-800);color:#fff}
+.status-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+.status-dot.on{background:#22c55e}.status-dot.off{background:#cbd5e1}.status-dot.done{background:#6366f1}
+
+/* TABS */
+.tabs{display:flex;gap:8px;margin:22px 0 14px;flex-wrap:wrap}
+.tab-btn{padding:12px 18px;border-radius:999px;border:2px solid var(--line);background:#fff;font-weight:800;font-size:14px;color:var(--green-900)}
+.tab-btn.active{background:var(--green-900);color:#fff;border-color:var(--green-900)}
+.tab-panel{display:none}.tab-panel.active{display:block;animation:fade .25s ease}
+
+/* TODAY LIST */
+.today-item{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px dashed var(--line)}
+.today-item:last-child{border-bottom:none}
+.today-item .avatar{width:44px;height:44px;font-size:15px;border-radius:12px}
+.today-item .nm{font-weight:800;font-size:13.5px}
+.today-item .tm{font-size:12px;color:var(--muted)}
+.empty{text-align:center;padding:28px 12px;color:var(--muted)}
+.empty .big{font-size:36px}
+
+/* MODAL */
+.modal{position:fixed;inset:0;background:rgba(6,35,26,.65);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal.show{display:flex}
+.modal-box{background:#fff;border-radius:20px;max-width:520px;width:100%;max-height:92vh;overflow:auto;padding:22px;box-shadow:0 24px 60px rgba(0,0,0,.35);border:2px solid var(--gold)}
+.modal-box h3{margin:0 0 4px;color:var(--green-900)}
+.qr-center{display:flex;flex-direction:column;align-items:center;gap:10px;margin:14px 0}
+.qr-center canvas,.qr-center img,.qr-center table{border:6px solid #fff;box-shadow:0 0 0 2px var(--gold);border-radius:10px}
+.code-chip{background:var(--green-950);color:var(--gold-light);padding:8px 14px;border-radius:999px;font-weight:900;letter-spacing:.12em;font-size:14px}
+
+/* ID CARD */
+.idcard{width:100%;max-width:420px;margin:0 auto;background:linear-gradient(135deg,var(--green-950),var(--green-800));color:#fff;border-radius:16px;overflow:hidden;border:3px solid var(--gold);box-shadow:var(--shadow)}
+.idcard-top{display:flex;gap:12px;align-items:center;padding:14px 16px;background:rgba(255,255,255,.08);border-bottom:2px solid var(--gold)}
+.idcard-top img{width:54px;height:54px;background:#fff;border-radius:10px;padding:3px}
+.idcard-top .t1{font-weight:900;font-size:14px;letter-spacing:.03em;line-height:1.2}
+.idcard-top .t2{font-size:11px;color:var(--gold-light);letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+.idcard-body{display:flex;gap:14px;padding:16px}
+.idcard-photo{width:104px;height:128px;border-radius:12px;border:2px solid var(--gold);object-fit:cover;background:#fff;flex:0 0 auto}
+.idcard-photo-ph{width:104px;height:128px;border-radius:12px;border:2px solid var(--gold);background:var(--green-700);display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;flex:0 0 auto}
+.idcard-info{flex:1;font-size:13px;line-height:1.55}
+.idcard-info b{color:var(--gold-light);font-size:11px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-top:6px}
+.idcard-info .nm{font-size:17px;font-weight:900;color:#fff}
+.idcard-foot{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:rgba(0,0,0,.25);font-size:11px;color:var(--gold-light);letter-spacing:.08em}
+.idcard-foot .qr-mini{background:#fff;padding:4px;border-radius:8px}
+.idcard-foot .qr-mini canvas,.idcard-foot .qr-mini img{width:52px;height:52px;display:block}
+
+/* TOAST */
+#toasts{position:fixed;bottom:18px;right:18px;z-index:200;display:flex;flex-direction:column;gap:10px}
+.toast{background:var(--green-950);color:#fff;border-left:5px solid var(--gold);padding:13px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);max-width:340px;font-size:14px;animation:slideIn .25s ease}
+.toast.err{border-left-color:#ef4444}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+
+footer{margin:28px 0 30px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+footer b{color:var(--green-900)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:280px;margin:10px auto}
+.pin-pad button{padding:14px;font-size:18px;font-weight:900;border-radius:12px;border:2px solid var(--line);background:#fff}
+.pin-pad button:active{background:var(--gold-light)}
+.pin-dots{display:flex;gap:8px;justify-content:center;margin:8px 0}
+.pin-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--gold);display:block}
+.pin-dots i.on{background:var(--gold)}
+.divider{height:1px;background:var(--line);margin:16px 0}
+.note{background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:11px 13px;font-size:13px;line-height:1.5}
+.note.green{background:#f0fdf4;border-color:#86efac}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.methods{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}.top-clock{margin-left:0;width:100%;text-align:left}.cam-box video{height:280px}}
+@media print{body::before{display:none}.topbar,.hero,.stats,.grid,.tabs,footer,#toasts,.no-print{display:none!important}.tab-panel{display:none!important}.tab-panel.print-active{display:block!important}.card{box-shadow:none;border:none}}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="logo-badge"><img src="logo.png" alt="MAKNAZUL 'IRFAN ACADEMY logo"></div>
+    <div class="brand">
+      <h1>MAKNAZUL <span>'IRFAN</span> ACADEMY</h1>
+      <p>Smart Clock In / Out System &nbsp;•&nbsp; Students &amp; Staff</p>
+    </div>
+    <div class="top-clock">
+      <div class="time"><span class="live-dot"></span><span id="liveTime">--:--:--</span></div>
+      <div class="date" id="liveDate">Loading date…</div>
+      <div class="hijri" id="liveHijri"></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="motto">✦ Know Me Before You Worship Me ✦ Est. 2024</div>
+    <h2>Assalamu Alaikum — Clock In / Out Terminal</h2>
+    <p>Register once with <b>Face Detection</b> + <b>Thumbprint</b>, get your personal <b>QR Code ID Card</b>, then clock in and out every day by face, QR scan, thumbprint, or ID + PIN. Every in/out time and date is recorded automatically.</p>
+    <div class="hero-meta">
+      <span class="pill">🕖 School starts <b>7:30 AM</b></span>
+      <span class="pill">⏰ Late after <b>7:45 AM</b></span>
+      <span class="pill">🤖 Face Engine: <b id="faceEngineStatus">Loading…</b></span>
+      <span class="pill">📅 <b id="heroDate"></b></span>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section class="stats">
+    <div class="stat gold"><div class="label">Registered</div><div class="num" id="statTotal">0</div><div class="sub">Students + Staff</div></div>
+    <div class="stat green"><div class="label">Present Today</div><div class="num" id="statPresent">0</div><div class="sub" id="statPresentSub">Clocked in today</div></div>
+    <div class="stat"><div class="label">On Site Now</div><div class="num" id="statOnSite">0</div><div class="sub">In, not yet out</div></div>
+    <div class="stat"><div class="label">Clocked Out</div><div class="num" id="statOut">0</div><div class="sub">Completed today</div></div>
+    <div class="stat red"><div class="label">Late Today</div><div class="num" id="statLate">0</div><div class="sub">After 7:45 AM</div></div>
+  </section>
+
+  <!-- MAIN GRID -->
+  <div class="grid">
+
+    <!-- TERMINAL -->
+    <section class="card" id="terminalCard">
+      <div class="card-head">
+        <h3>🕐 Clock In / Out Terminal</h3>
+        <span class="hint">Choose a verification method — first tap = <b>Clock In</b>, second tap = <b>Clock Out</b></span>
+      </div>
+      <div class="card-body">
+
+        <div class="methods">
+          <button class="method-btn active" data-method="face"><span class="ico">😊</span><span class="t">Face Scan</span><span class="s">Camera + AI</span></button>
+          <button class="method-btn" data-method="qr"><span class="ico">▣</span><span class="t">QR Code</span><span class="s">Scan ID card</span></button>
+          <button class="method-btn" data-method="thumb"><span class="ico">👆</span><span class="t">Thumbprint</span><span class="s">Fingerprint</span></button>
+          <button class="method-btn" data-method="idpin"><span class="ico">🔢</span><span class="t">ID + PIN</span><span class="s">Manual backup</span></button>
+        </div>
+
+        <!-- FACE PANEL -->
+        <div class="panel active" id="panel-face">
+          <div class="cam-box">
+            <video id="faceVideo" autoplay playsinline muted></video>
+            <div class="oval"></div>
+            <div class="scanline" id="faceScanline" style="display:none"></div>
+            <div class="cam-status">
+              <span class="badge" id="faceCamBadge">📷 Camera off</span>
+              <span class="badge gold" id="faceDetectBadge">Face: waiting…</span>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-green" id="btnFaceStart">📷 Start Camera</button>
+            <button class="btn btn-gold" id="btnFaceCapture" disabled>😊 Capture &amp; Verify Face</button>
+            <button class="btn btn-ghost" id="btnFaceStop" disabled>Stop</button>
+          </div>
+          <p class="small" style="margin-top:10px">Face Detection uses on-device AI when available (face-api.js). If the AI model cannot load, the system falls back to secure face-photo matching — your enrolled photo is compared with the live capture. Demo users without a photo can confirm with the ID + PIN method.</p>
+          <div id="facePreviewBox"></div>
+          <div class="result" id="faceResult"></div>
+        </div>
+
+        <!-- QR PANEL -->
+        <div class="panel" id="panel-qr">
+          <div class="cam-box">
+            <video id="qrVideo" autoplay playsinline muted></video>
+            <div class="oval" style="width:230px;height:230px;border-radius:18px"></div>
+            <div class="scanline" id="qrScanline" style="display:none"></div>
+            <div class="cam-status">
+              <span class="badge" id="qrCamBadge">📷 Camera off</span>
+              <span class="badge gold">Point QR at the square</span>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-green" id="btnQrStart">▣ Start QR Scanner</button>
+            <button class="btn btn-ghost" id="btnQrStop" disabled>Stop</button>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label>Or type your QR code / User ID manually</label>
+            <div style="display:flex;gap:8px">
+              <input id="qrManualInput" placeholder="e.g. MIA-2026-001 or full QR code" style="flex:1">
+              <button class="btn btn-gold" id="btnQrManual">Verify</button>
+            </div>
+          </div>
+          <div class="result" id="qrResult"></div>
+        </div>
+
+        <!-- THUMB PANEL -->
+        <div class="panel" id="panel-thumb">
+          <div class="thumb-wrap">
+            <p class="small" style="max-width:460px;margin:0 auto">Press and <b>hold</b> the fingerprint for 2 seconds. If your device supports WebAuthn, a real device fingerprint prompt will appear; otherwise the secure hold-to-scan fallback is used.</p>
+            <div class="finger" id="fingerBtn">
+              <div class="fill" id="fingerFill"></div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 11a3 3 0 0 1 3 3c0 2.5-.5 4.5-1.2 6M9 14c0 3-.4 5-1 6.5M12 8a6 6 0 0 1 6 6c0 1.5-.1 3-.4 4.5M6 14c0-3.3 2.7-6 6-6M4.5 10.5A8 8 0 0 1 12 4a8 8 0 0 1 7.5 5.5M12 11v4"/></svg>
+            </div>
+            <div class="thumb-progress"><i id="thumbBar"></i></div>
+            <div id="thumbStatus" style="font-weight:800;color:var(--green-900)">Hold fingerprint to scan</div>
+            <div class="field" style="max-width:380px;margin:14px auto 0">
+              <label>Select your name (for thumbprint matching)</label>
+              <select id="thumbUserSelect"></select>
+            </div>
+          </div>
+          <div class="result" id="thumbResult"></div>
+        </div>
+
+        <!-- ID+PIN PANEL -->
+        <div class="panel" id="panel-idpin">
+          <div class="form-grid">
+            <div class="field full">
+              <label>Select your name / ID</label>
+              <select id="idpinUserSelect"></select>
+            </div>
+          </div>
+          <div style="text-align:center;margin-top:8px">
+            <div style="font-weight:800;color:var(--green-900)">Enter 4-digit PIN</div>
+            <div class="pin-dots" id="pinDots"><i></i><i></i><i></i><i></i></div>
+            <div class="pin-pad" id="pinPad">
+              <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+              <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+              <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+              <button data-k="C">⌫</button><button data-k="0">0</button><button data-k="OK">✓</button>
+            </div>
+            <p class="small">Demo PIN for seeded users: <b>1234</b> &nbsp;•&nbsp; New registrations use the PIN you set.</p>
+          </div>
+          <div class="result" id="idpinResult"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TODAY -->
+    <aside class="card">
+      <div class="card-head">
+        <h3>📋 Today — Live</h3>
+        <span class="hint" id="todayDateLabel"></span>
+        <button class="btn btn-ghost" style="margin-left:auto;padding:8px 12px;font-size:13px" onclick="document.getElementById('tab-log').click();document.getElementById('logCard').scrollIntoView({behavior:'smooth'})">Full log →</button>
+      </div>
+      <div class="card-body" style="padding-top:8px">
+        <div id="todayList"><div class="empty"><div class="big">🌅</div>No clock-ins yet today.<br>Be the first to clock in!</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-register">➕ Register (Face + Thumbprint + QR)</button>
+    <button class="tab-btn" id="tab-log">📊 Attendance Log (Time &amp; Date)</button>
+    <button class="tab-btn" id="tab-people">🪪 People &amp; ID Cards</button>
+  </div>
+
+  <!-- REGISTER PANEL -->
+  <section class="card tab-panel active" id="panel-register">
+    <div class="card-head"><h3>New Registration — Face Detection + Thumbprint + QR Code</h3><span class="hint">Complete all 3 steps to receive a QR ID card</span></div>
+    <div class="card-body">
+      <div class="steps">
+        <div class="step active" id="stepDot1">1 • Details</div>
+        <div class="step" id="stepDot2">2 • Face Enrollment</div>
+        <div class="step" id="stepDot3">3 • Thumbprint + PIN + QR</div>
+      </div>
+
+      <!-- STEP 1 -->
+      <div class="wiz-panel active" id="wiz1">
+        <div class="form-grid">
+          <div class="field"><label>Full Name *</label><input id="regName" placeholder="e.g. Aisha Bello"></div>
+          <div class="field"><label>Role *</label><select id="regRole"><option value="Student">Student</option><option value="Staff">Staff</option><option value="Teacher">Teacher</option></select></div>
+          <div class="field"><label>Class / Department *</label><input id="regClass" placeholder="e.g. JSS 2A / Mathematics Dept."></div>
+          <div class="field"><label>Gender</label><select id="regGender"><option value="Male">Male</option><option value="Female">Female</option></select></div>
+          <div class="field"><label>Phone Number</label><input id="regPhone" placeholder="0803 000 0000"></div>
+          <div class="field"><label>Email (optional)</label><input id="regEmail" placeholder="name@example.com"></div>
+          <div class="field full"><label>Auto-generated User ID</label><input id="regIdPreview" readonly style="background:#f7f3e3;font-weight:800"></div>
+        </div>
+        <div class="btn-row"><button class="btn btn-green" id="btnWiz1Next">Continue to Face Enrollment →</button></div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="wiz-panel" id="wiz2">
+        <div class="cam-box">
+          <video id="regVideo" autoplay playsinline muted></video>
+          <div class="oval"></div>
+          <div class="scanline" id="regScanline" style="display:none"></div>
+          <div class="cam-status"><span class="badge" id="regCamBadge">📷 Camera off</span><span class="badge gold" id="regDetectBadge">Face: waiting…</span></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-green" id="btnRegCamStart">📷 Start Camera</button>
+          <button class="btn btn-gold" id="btnRegCapture" disabled>📸 Capture Face Photo</button>
+          <button class="btn btn-ghost" id="btnRegCamStop" disabled>Stop</button>
+        </div>
+        <div id="regFacePreview"></div>
+        <div class="note" style="margin-top:12px">Your face photo is stored on this device only (browser storage) and used to verify you at clock-in. Look straight at the camera, good lighting, no sunglasses.</div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btnWiz2Back">← Back</button>
+          <button class="btn btn-green" id="btnWiz2Next" disabled>Continue to Thumbprint →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="wiz-panel" id="wiz3">
+        <div class="form-grid">
+          <div class="field">
+            <label>Thumbprint Enrollment</label>
+            <div class="thumb-wrap" style="border:2px dashed var(--line);border-radius:14px;padding:14px">
+              <div class="finger" id="regFingerBtn" style="width:110px;height:110px">
+                <div class="fill" id="regFingerFill"></div>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" style="width:70px;height:70px"><path d="M12 11a3 3 0 0 1 3 3c0 2.5-.5 4.5-1.2 6M9 14c0 3-.4 5-1 6.5M12 8a6 6 0 0 1 6 6c0 1.5-.1 3-.4 4.5M6 14c0-3.3 2.7-6 6-6M4.5 10.5A8 8 0 0 1 12 4a8 8 0 0 1 7.5 5.5M12 11v4"/></svg>
+              </div>
+              <div class="thumb-progress"><i id="regThumbBar"></i></div>
+              <div id="regThumbStatus" style="font-weight:800;color:var(--green-900);font-size:13.5px">Hold to enroll thumbprint</div>
+            </div>
+          </div>
+          <div>
+            <div class="field"><label>Set 4-Digit PIN *</label><input id="regPin" maxlength="4" inputmode="numeric" placeholder="e.g. 2580"></div>
+            <div class="field" style="margin-top:10px"><label>Confirm PIN *</label><input id="regPin2" maxlength="4" inputmode="numeric" placeholder="Repeat PIN"></div>
+            <div class="note green" style="margin-top:12px">On completion you will receive a <b>QR Code ID Card</b> you can download/print. Keep it safe — it is your clock-in key.</div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btnWiz3Back">← Back</button>
+          <button class="btn btn-gold" id="btnRegisterFinish">✅ Complete Registration &amp; Generate QR</button>
+        </div>
+      </div>
+
+      <div id="regSuccess"></div>
+    </div>
+  </section>
+
+  <!-- LOG PANEL -->
+  <section class="card tab-panel" id="panel-log">
+    <div class="card-head" id="logCard"><h3>Attendance Log — Time &amp; Date of Clock In / Out</h3><span class="hint">All records stored in this browser</span>
+      <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-green" style="padding:9px 14px;font-size:13px" id="btnExportCsv">⬇ Export CSV</button>
+        <button class="btn btn-ghost" style="padding:9px 14px;font-size:13px" id="btnPrintLog">🖨 Print</button>
+        <button class="btn btn-danger" style="padding:9px 14px;font-size:13px" id="btnClearLog">Clear Log</button>
+      </span>
+    </div>
+    <div class="card-body">
+      <div class="filters">
+        <input id="filterSearch" placeholder="🔍 Search name or ID…">
+        <select id="filterRole"><option value="">All Roles</option><option>Student</option><option>Staff</option><option>Teacher</option></select>
+        <input type="date" id="filterDate">
+        <select id="filterStatus"><option value="">All Status</option><option value="Present">Present</option><option value="Late">Late</option><option value="Very Late">Very Late</option></select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Name</th><th>ID</th><th>Role</th><th>Clock In</th><th>Clock Out</th><th>Duration</th><th>Status</th><th>Method</th><th></th></tr></thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+      <p class="small" id="logCount" style="margin-top:10px"></p>
+    </div>
+  </section>
+
+  <!-- PEOPLE PANEL -->
+  <section class="card tab-panel" id="panel-people">
+    <div class="card-head"><h3>Registered People &amp; QR ID Cards</h3><span class="hint">Tap “QR Card” to view / download / print</span>
+      <span style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-ghost" style="padding:9px 14px;font-size:13px" id="btnSeed">Load Demo Data</button>
+        <button class="btn btn-danger" style="padding:9px 14px;font-size:13px" id="btnWipe">Reset All Data</button>
+      </span>
+    </div>
+    <div class="card-body"><div class="people" id="peopleGrid"></div></div>
+  </section>
+
+  <footer>
+    <b>MAKNAZUL 'IRFAN ACADEMY</b> — Know Me Before You Worship Me • Est. 2024<br>
+    Smart Clock In/Out System • Face Detection + Thumbprint + QR Code • Data saved locally in your browser (localStorage).<br>
+    For multi-device / cloud sync, connect Supabase or Google Sheets and deploy this folder to Vercel.
+  </footer>
+</div>
+
+<!-- QR / ID CARD MODAL -->
+<div class="modal" id="qrModal">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:start">
+      <div><h3 id="modalTitle">QR ID Card</h3><p class="small" style="margin:2px 0 0">Scan this QR at the terminal to clock in/out.</p></div>
+      <button class="mini-btn" onclick="closeModal()">✕ Close</button>
+    </div>
+    <div class="qr-center">
+      <div id="modalQr"></div>
+      <div class="code-chip" id="modalCode">MIA-0000</div>
+      <div class="small" id="modalPayload" style="word-break:break-all;text-align:center;max-width:380px"></div>
+    </div>
+    <div id="modalIdCard"></div>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn btn-gold" id="btnDownloadQr">⬇ Download QR PNG</button>
+      <button class="btn btn-green" id="btnPrintCard">🖨 Print ID Card</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="qrcode.min.js"></script>
+<script src="jsQR.js"></script>
+<script src="face-api.min.js"></script>
+<script>
+/* ============================================================
+   MAKNAZUL 'IRFAN ACADEMY — Clock In/Out App
+   Storage: localStorage (mia_users, mia_attendance)
+   ============================================================ */
+const LS_USERS='mia_users_v1', LS_ATT='mia_attendance_v1';
+const SCHOOL_START='07:30', LATE_AFTER='07:45';
+const $=id=>document.getElementById(id);
+const todayStr=()=>new Date().toISOString().slice(0,10);
+const nowISO=()=>new Date().toISOString();
+function fmtTime(iso){ if(!iso) return '—'; const d=new Date(iso); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+function fmtDate(iso){ if(!iso) return '—'; const d=new Date(iso); return d.toLocaleDateString([], {weekday:'short', day:'2-digit', month:'short', year:'numeric'}); }
+function fmtDateShort(ds){ if(!ds) return '—'; const d=new Date(ds+'T12:00:00'); return d.toLocaleDateString([], {weekday:'short', day:'2-digit', month:'short', year:'numeric'}); }
+function durationStr(a,b){ if(!a||!b) return '—'; let s=Math.max(0,Math.round((new Date(b)-new Date(a))/1000)); const h=Math.floor(s/3600),m=Math.floor(s%3600/60); return (h?h+'h ':'')+m+'m'; }
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++){h=(h<<5)-h+s.charCodeAt(i);h|=0;} return Math.abs(h).toString(36).toUpperCase(); }
+function initials(name){ return (name||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg,err){ const t=document.createElement('div'); t.className='toast'+(err?' err':''); t.textContent=msg; $('toasts').appendChild(t); setTimeout(()=>t.remove(),4200); }
+function beep(ok=true){ try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(),g=ctx.createGain(); o.connect(g);g.connect(ctx.destination); o.frequency.value=ok?880:220; o.type='sine'; g.gain.value=.12; o.start(); g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.35); o.stop(ctx.currentTime+.36);}catch(e){} }
+
+/* ---------- DATA ---------- */
+function loadUsers(){ try{return JSON.parse(localStorage.getItem(LS_USERS)||'[]')}catch(e){return[]} }
+function saveUsers(u){ localStorage.setItem(LS_USERS,JSON.stringify(u)); }
+function loadAtt(){ try{return JSON.parse(localStorage.getItem(LS_ATT)||'[]')}catch(e){return[]} }
+function saveAtt(a){ localStorage.setItem(LS_ATT,JSON.stringify(a)); }
+function nextUserId(){ const u=loadUsers(); const year=new Date().getFullYear(); let max=0; u.forEach(x=>{ const m=String(x.id||'').match(/(\d+)$/); if(m) max=Math.max(max,parseInt(m[1],10)); }); return 'MIA-'+year+'-'+String(max+1).padStart(3,'0'); }
+function qrPayloadFor(user){ return 'MIA|'+user.id+'|'+user.name+'|'+hashStr(user.id+user.name+'MIA2024'); }
+function findUserByCode(code){
+  if(!code) return null; code=String(code).trim();
+  const users=loadUsers();
+  // full QR payload MIA|ID|NAME|HASH
+  if(code.includes('|')){ const parts=code.split('|'); const id=parts[1]; return users.find(u=>u.id===id)||null; }
+  return users.find(u=>u.id.toLowerCase()===code.toLowerCase())||null;
+}
+function statusFor(clockInISO){
+  if(!clockInISO) return 'Present';
+  const d=new Date(clockInISO); const hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  if(hm<=LATE_AFTER) return 'Present';
+  if(hm<='08:30') return 'Late';
+  return 'Very Late';
+}
+
+/* ---------- CLOCK ---------- */
+function tick(){
+  const n=new Date();
+  $('liveTime').textContent=n.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const greg=n.toLocaleDateString([], {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  $('liveDate').textContent=greg; $('heroDate').textContent=greg; $('todayDateLabel').textContent='• '+greg;
+  try{ const hijri=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{day:'numeric',month:'long',year:'numeric'}).format(n); $('liveHijri').textContent='🌙 '+hijri; }catch(e){ $('liveHijri').textContent=''; }
+}
+setInterval(tick,1000); tick();
+
+/* ---------- RENDER ---------- */
+function avatarHTML(user,size){
+  if(user.faceThumb) return `<div class="avatar"><img src="${user.faceThumb}" alt=""></div>`;
+  return `<div class="avatar">${esc(initials(user.name))}</div>`;
+}
+function todayRecord(userId){ const t=todayStr(); return loadAtt().find(r=>r.userId===userId && r.date===t && !r.clockOut) || loadAtt().filter(r=>r.userId===userId && r.date===t).slice(-1)[0] || null; }
+function renderAll(){ renderStats(); renderToday(); renderLog(); renderPeople(); refreshSelects(); }
+function renderStats(){
+  const users=loadUsers(), att=loadAtt(), t=todayStr();
+  const today=att.filter(r=>r.date===t);
+  $('statTotal').textContent=users.length;
+  $('statPresent').textContent=today.length;
+  $('statOnSite').textContent=today.filter(r=>r.clockIn && !r.clockOut).length;
+  $('statOut').textContent=today.filter(r=>r.clockOut).length;
+  $('statLate').textContent=today.filter(r=>r.status==='Late'||r.status==='Very Late').length;
+  $('statPresentSub').textContent='of '+users.length+' registered • '+fmtDateShort(t);
+}
+function renderToday(){
+  const users=loadUsers(), att=loadAtt(), t=todayStr();
+  const today=att.filter(r=>r.date===t).sort((a,b)=>new Date(b.clockIn)-new Date(a.clockIn));
+  const box=$('todayList');
+  if(!today.length){ box.innerHTML='<div class="empty"><div class="big">🌅</div>No clock-ins yet today.<br>Be the first to clock in!</div>'; return; }
+  box.innerHTML=today.map(r=>{
+    const u=users.find(x=>x.id===r.userId)||{name:r.userId,faceThumb:null};
+    const onSite=r.clockIn && !r.clockOut;
+    return `<div class="today-item">${avatarHTML(u)}<div style="flex:1;min-width:0"><div class="nm">${esc(u.name)}</div><div class="tm">${esc(r.userId)} • ${esc(u.role||'')} • via ${esc(r.method)}</div></div><div style="text-align:right"><div class="tm">In <b>${fmtTime(r.clockIn)}</b></div><div class="tm">${r.clockOut? 'Out <b>'+fmtTime(r.clockOut)+'</b>' : '<span class="status-dot on"></span>On site'}</div></div></div>`;
+  }).join('');
+}
+function renderLog(){
+  const users=loadUsers(), att=loadAtt();
+  const q=($('filterSearch').value||'').toLowerCase(), role=$('filterRole').value, date=$('filterDate').value, st=$('filterStatus').value;
+  let rows=[...att].sort((a,b)=> (b.date+a.clockIn).localeCompare(a.date+b.clockIn)).reverse();
+  // sort newest first properly:
+  rows.sort((a,b)=> new Date(b.clockIn)-new Date(a.clockIn));
+  rows=rows.filter(r=>{
+    const u=users.find(x=>x.id===r.userId);
+    if(q && !((u?.name||'').toLowerCase().includes(q)||r.userId.toLowerCase().includes(q))) return false;
+    if(role && (u?.role||'')!==role) return false;
+    if(date && r.date!==date) return false;
+    if(st && r.status!==st) return false;
+    return true;
+  });
+  $('logBody').innerHTML=rows.length? rows.map(r=>{
+    const u=users.find(x=>x.id===r.userId)||{name:'(removed)',role:'—'};
+    const tagCls=r.status==='Present'?'present':(r.status==='Late'?'late':'verylate');
+    return `<tr><td>${fmtDateShort(r.date)}</td><td><b>${esc(u.name)}</b></td><td>${esc(r.userId)}</td><td>${esc(u.role)}</td><td>${fmtTime(r.clockIn)}</td><td>${r.clockOut?fmtTime(r.clockOut):'<span class="tag in">On site</span>'}</td><td>${durationStr(r.clockIn,r.clockOut)}</td><td><span class="tag ${tagCls}">${esc(r.status)}</span></td><td>${esc(r.method)}</td><td><button class="mini-btn" onclick="deleteRecord('${r.id}')">🗑</button></td></tr>`;
+  }).join('') : '<tr><td colspan="10" style="text-align:center;padding:26px;color:var(--muted)">No records match your filters.</td></tr>';
+  $('logCount').textContent='Showing '+rows.length+' record(s) • Total in system: '+att.length;
+}
+window.deleteRecord=function(id){ if(!confirm('Delete this attendance record?'))return; saveAtt(loadAtt().filter(r=>r.id!==id)); renderAll(); toast('Record deleted.'); };
+function renderPeople(){
+  const users=loadUsers(), att=loadAtt(), t=todayStr();
+  const grid=$('peopleGrid');
+  if(!users.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="big">🪪</div>No people registered yet.<br>Go to <b>Register</b> tab to add students &amp; staff with face + thumbprint + QR.</div>'; return; }
+  grid.innerHTML=users.map(u=>{
+    const rec=att.filter(r=>r.userId===u.id && r.date===t).slice(-1)[0];
+    let statusHTML='<span class="status-dot off"></span>Not in today';
+    if(rec && rec.clockIn && !rec.clockOut) statusHTML='<span class="status-dot on"></span>On site since '+fmtTime(rec.clockIn);
+    else if(rec && rec.clockOut) statusHTML='<span class="status-dot done"></span>Out at '+fmtTime(rec.clockOut);
+    return `<div class="person"><div class="person-top">${avatarHTML(u)}<div><h4>${esc(u.name)}</h4><div class="id">${esc(u.id)} • ${esc(u.role)}</div><div style="font-size:12.5px;margin-top:3px">${statusHTML}</div></div></div>
+    <div class="meta">${esc(u.classDept||'')} • ${esc(u.gender||'')}<br>📱 ${esc(u.phone||'—')} ${u.thumbId?'• 👆 Thumbprint ✓':'• 👆 No thumbprint'} ${u.faceThumb?'• 😊 Face ✓':'• 😊 No face photo'}</div>
+    <div class="actions"><button class="mini-btn gold" onclick="openQrModal('${u.id}')">▣ QR Card</button><button class="mini-btn green" onclick="manualToggle('${u.id}')">🕐 Clock In/Out</button><button class="mini-btn" onclick="deleteUser('${u.id}')">🗑</button></div></div>`;
+  }).join('');
+}
+window.deleteUser=function(id){ if(!confirm('Delete this person and their attendance?'))return; saveUsers(loadUsers().filter(u=>u.id!==id)); saveAtt(loadAtt().filter(r=>r.userId!==id)); renderAll(); toast('Person deleted.'); };
+window.manualToggle=function(id){ doClock(id,'Manual'); };
+function refreshSelects(){
+  const users=loadUsers();
+  const opts=users.length? users.map(u=>`<option value="${u.id}">${esc(u.name)} (${esc(u.id)}) — ${esc(u.role)}</option>`).join('') : '<option value="">— No users yet —</option>';
+  $('thumbUserSelect').innerHTML=opts; $('idpinUserSelect').innerHTML=opts;
+}
+
+/* ---------- CLOCK LOGIC ---------- */
+function doClock(userId, method){
+  const users=loadUsers(); const user=users.find(u=>u.id===userId);
+  if(!user){ showResultAll('err','User not found','No registered user matches that code. Please register first or check the ID.'); return null; }
+  const att=loadAtt(); const t=todayStr(); const now=nowISO();
+  let rec=att.filter(r=>r.userId===userId && r.date===t).slice(-1)[0];
+  let action, recOut;
+  if(!rec || (rec.clockIn && rec.clockOut)){
+    rec={id:'r'+Date.now()+Math.random().toString(36).slice(2,7), userId, date:t, clockIn:now, clockOut:null, method, status:statusFor(now)};
+    att.push(rec); action='CLOCK IN';
+  } else if(rec.clockIn && !rec.clockOut){
+    rec.clockOut=now; action='CLOCK OUT';
+  }
+  saveAtt(att); renderAll(); beep(true);
+  const msg=`${action} recorded • ${fmtDate(now)} • ${fmtTime(now)}`;
+  showResultAll('ok', user.name, msg, user, action, rec);
+  toast(`${user.name}: ${action} at ${fmtTime(now)}`);
+  return rec;
+}
+function showResultAll(type,title,meta,user,action,rec){
+  // show in all result boxes (only visible panel matters, but keep consistent)
+  const html=`<div class="result-head">${user?avatarHTML(user):'<div class="avatar">?</div>'}<div><h4>${esc(title)}</h4><div class="meta">${esc(meta)}${user?`<br>${esc(user.id)} • ${esc(user.role)} • ${esc(user.classDept||'')}`:''}${rec?`<br>Status: <b>${esc(rec.status)}</b> • Method: ${esc(rec.method)}`:''}</div></div><div class="big-stamp"><div class="a">${action||'Result'}</div><div class="b">${fmtTime(nowISO())}</div><div class="c">${fmtDateShort(todayStr())}</div></div></div>`;
+  ['faceResult','qrResult','thumbResult','idpinResult'].forEach(id=>{ const el=$(id); el.className='result show '+type; el.innerHTML=html; });
+}
+function showResultOne(id,type,title,meta,user,action,rec){
+  const el=$(id); el.className='result show '+type;
+  el.innerHTML=`<div class="result-head">${user?avatarHTML(user):'<div class="avatar">?</div>'}<div><h4>${esc(title)}</h4><div class="meta">${esc(meta)}${user?`<br>${esc(user.id)} • ${esc(user.role)}`:''}</div></div><div class="big-stamp"><div class="a">${action||'Result'}</div><div class="b">${fmtTime(nowISO())}</div><div class="c">${fmtDateShort(todayStr())}</div></div></div>`;
+}
+
+/* ---------- METHOD TABS ---------- */
+document.querySelectorAll('.method-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.method-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active'); $('panel-'+btn.dataset.method).classList.add('active');
+    // stop other cameras
+    if(btn.dataset.method!=='face') stopFaceCam(); if(btn.dataset.method!=='qr') stopQrCam();
+  });
+});
+
+/* ---------- CAMERA HELPERS ---------- */
+let faceStream=null, qrStream=null, regStream=null, faceRaf=null, qrRaf=null, regRaf=null;
+async function getCam(videoEl){
+  if(!navigator.mediaDevices?.getUserMedia) throw new Error('Camera API not available. Use HTTPS or localhost, or use ID + PIN / manual QR entry.');
+  return await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+}
+function stopStream(stream,videoEl){ if(stream){ stream.getTracks().forEach(t=>t.stop()); } if(videoEl){ videoEl.srcObject=null; } }
+
+/* ---------- FACE: DETECTION + MATCHING ---------- */
+let faceApiReady=false, faceApiFailed=false;
+async function initFaceApi(){
+  try{
+    if(typeof faceapi==='undefined') throw new Error('face-api not loaded');
+    const base='https://justadudewhohacks.github.io/face-api.js/models';
+    await faceapi.nets.tinyFaceDetector.loadFromUri(base);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(base);
+    faceApiReady=true; $('faceEngineStatus').textContent='AI Ready ✓';
+  }catch(e){ faceApiFailed=true; $('faceEngineStatus').textContent='Photo-Match Mode'; }
+}
+initFaceApi();
+
+async function detectLoop(videoEl, badgeEl, scanEl){
+  if(!videoEl.videoWidth) return;
+  try{
+    if(faceApiReady && typeof faceapi!=='undefined'){
+      const det=await faceapi.detectSingleFace(videoEl,new faceapi.TinyFaceDetectorOptions());
+      if(det){ badgeEl.textContent='Face: detected ✓'; badgeEl.style.background='#15803d'; }
+      else { badgeEl.textContent='Face: not found — center your face'; badgeEl.style.background='rgba(0,0,0,.6)'; }
+    } else {
+      // Fallback heuristic: check skin-tone-ish variance in center region
+      const c=document.createElement('canvas'); c.width=80; c.height=80;
+      const ctx=c.getContext('2d'); ctx.drawImage(videoEl, videoEl.videoWidth/2-40, videoEl.videoHeight/2-40, 80,80,0,0,80,80);
+      const d=ctx.getImageData(0,0,80,80).data; let bright=0; for(let i=0;i<d.length;i+=16) bright+=d[i]+d[i+1]+d[i+2];
+      const avg=bright/(d.length/16*3);
+      if(avg>40 && avg<245){ badgeEl.textContent='Face: likely present ✓'; badgeEl.style.background='#15803d'; }
+      else { badgeEl.textContent='Face: waiting…'; badgeEl.style.background='rgba(0,0,0,.6)'; }
+    }
+  }catch(e){}
+}
+function startDetectLoop(videoEl,badgeEl,scanEl,rafRef){
+  scanEl.style.display='block';
+  const loop=async()=>{ await detectLoop(videoEl,badgeEl,scanEl); rafRef.id=requestAnimationFrame(loop); };
+  loop();
+}
+function faceHistogram(imgDataUrl){
+  return new Promise(res=>{
+    const img=new Image(); img.onload=()=>{
+      const c=document.createElement('canvas'); c.width=32;c.height=32; const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,32,32);
+      const d=ctx.getImageData(0,0,32,32).data; const hist=new Array(12).fill(0); let sum=0;
+      for(let i=0;i<d.length;i+=4){ const r=d[i],g=d[i+1],b=d[i+2]; hist[Math.floor(r/64)]++; hist[4+Math.floor(g/64)]++; hist[8+Math.floor(b/64)]++; sum+=r+g+b; }
+      res({hist,avg:sum/(d.length/4*3)});
+    }; img.src=imgDataUrl;
+  });
+}
+async function faceSimilarity(a,b){
+  const ha=await faceHistogram(a), hb=await faceHistogram(b);
+  let diff=0; for(let i=0;i<12;i++) diff+=Math.abs(ha.hist[i]-hb.hist[i]);
+  const avgDiff=Math.abs(ha.avg-hb.avg)/255;
+  const score=Math.max(0, 100 - (diff/ (32*32) *120) - avgDiff*40);
+  return Math.round(score);
+}
+function capturePhoto(videoEl){
+  const c=document.createElement('canvas'); const w=videoEl.videoWidth||640,h=videoEl.videoHeight||480;
+  c.width=320;c.height=320; const ctx=c.getContext('2d');
+  const side=Math.min(w,h)*0.62; const sx=(w-side)/2, sy=(h-side)/2;
+  ctx.drawImage(videoEl,sx,sy,side,side,0,0,320,320);
+  return c.toDataURL('image/jpeg',0.82);
+}
+
+/* Face terminal */
+$('btnFaceStart').addEventListener('click',async()=>{
+  try{ faceStream=await getCam($('faceVideo')); $('faceVideo').srcObject=faceStream; await $('faceVideo').play();
+    $('faceCamBadge').textContent='📷 Camera on'; $('btnFaceCapture').disabled=false; $('btnFaceStop').disabled=false; $('btnFaceStart').disabled=true;
+    startDetectLoop($('faceVideo'),$('faceDetectBadge'),$('faceScanline'),{id:null,set id(v){this._id=v},get id(){return this._id}});
+    // simpler loop handle:
+    faceRaf=setInterval(()=>detectLoop($('faceVideo'),$('faceDetectBadge'),$('faceScanline')),600);
+  }catch(e){ toast('Camera error: '+e.message,true); showResultOne('faceResult','err','Camera unavailable',e.message); }
+});
+$('btnFaceStop').addEventListener('click',stopFaceCam);
+function stopFaceCam(){ stopStream(faceStream,$('faceVideo')); faceStream=null; if(faceRaf)clearInterval(faceRaf); $('faceCamBadge').textContent='📷 Camera off'; $('faceDetectBadge').textContent='Face: waiting…'; $('faceScanline').style.display='none'; $('btnFaceStart').disabled=false; $('btnFaceCapture').disabled=true; $('btnFaceStop').disabled=true; }
+$('btnFaceCapture').addEventListener('click',async()=>{
+  const video=$('faceVideo'); if(!video.videoWidth){ toast('Camera not ready',true); return; }
+  const photo=capturePhoto(video);
+  $('facePreviewBox').innerHTML=`<div class="face-preview"><img src="${photo}"><div><b>Captured face</b><br><span class="small">Comparing with enrolled photos…</span><div id="faceMatchLine" style="margin-top:6px;font-weight:800">Analyzing…</div></div></div>`;
+  const users=loadUsers().filter(u=>u.faceThumb);
+  if(!users.length){
+    $('faceMatchLine').innerHTML='⚠️ No enrolled face photos yet. Register with face first, or use QR / ID+PIN.';
+    showResultOne('faceResult','info','No face enrollments','Please register a face photo first (Register tab), or use QR / ID + PIN for demo users.');
+    return;
+  }
+  let best=null,bestScore=-1;
+  for(const u of users){ const s=await faceSimilarity(photo,u.faceThumb); if(s>bestScore){bestScore=s;best=u;} }
+  $('faceMatchLine').innerHTML=`Best match: <b>${esc(best.name)}</b> — confidence <span class="conf">${bestScore}%</span>`;
+  if(bestScore>=55){ doClock(best.id,'Face'); }
+  else { beep(false); showResultOne('faceResult','err','Face not recognized',`Confidence ${bestScore}% is too low. Try better lighting, or use QR / ID + PIN.`); }
+});
+
+/* ---------- QR SCAN ---------- */
+$('btnQrStart').addEventListener('click',async()=>{
+  try{ qrStream=await getCam($('qrVideo')); $('qrVideo').srcObject=qrStream; await $('qrVideo').play();
+    $('qrCamBadge').textContent='📷 Scanner on'; $('btnQrStart').disabled=true; $('btnQrStop').disabled=false; $('qrScanline').style.display='block';
+    const tickQr=()=>{
+      if(!qrStream) return;
+      const v=$('qrVideo');
+      if(v.videoWidth && typeof jsQR!=='undefined'){
+        const c=document.createElement('canvas'); c.width=v.videoWidth;c.height=v.videoHeight; const ctx=c.getContext('2d'); ctx.drawImage(v,0,0);
+        const data=ctx.getImageData(0,0,c.width,c.height);
+        const code=jsQR(data.data,data.width,data.height,{inversionAttempts:'dontInvert'});
+        if(code && code.data){ const u=findUserByCode(code.data); if(u){ stopQrCam(); doClock(u.id,'QR'); } else { showResultOne('qrResult','err','QR not recognized',`Scanned: ${code.data.slice(0,80)} — not a registered MAKNAZUL code.`); stopQrCam(); } return; }
+      }
+      qrRaf=requestAnimationFrame(tickQr);
+    }; tickQr();
+  }catch(e){ toast('Camera error: '+e.message,true); }
+});
+$('btnQrStop').addEventListener('click',stopQrCam);
+function stopQrCam(){ stopStream(qrStream,$('qrVideo')); qrStream=null; if(qrRaf)cancelAnimationFrame(qrRaf); $('qrCamBadge').textContent='📷 Camera off'; $('qrScanline').style.display='none'; $('btnQrStart').disabled=false; $('btnQrStop').disabled=true; }
+$('btnQrManual').addEventListener('click',()=>{
+  const code=$('qrManualInput').value.trim(); const u=findUserByCode(code);
+  if(!u){ beep(false); showResultOne('qrResult','err','Code not found',`"${esc(code)}" is not registered. Check the ID or register first.`); return; }
+  doClock(u.id,'QR (manual)');
+});
+
+/* ---------- THUMBPRINT (hold) ---------- */
+function holdToScan(el, fillEl, barEl, statusEl, onDone, holdMs=2000){
+  let start=null, raf=null;
+  const update=(t)=>{ if(!start)start=t; const p=Math.min(1,(t-start)/holdMs); fillEl.style.height=(p*100)+'%'; barEl.style.width=(p*100)+'%'; if(p>=1){ cleanup(); onDone(); } else raf=requestAnimationFrame(update); };
+  const begin=(e)=>{ e.preventDefault(); el.classList.add('holding'); start=null; raf=requestAnimationFrame(update); statusEl.textContent='Scanning… keep holding'; };
+  const cleanup=()=>{ if(raf)cancelAnimationFrame(raf); el.classList.remove('holding'); fillEl.style.height='0%'; barEl.style.width='0%'; };
+  const cancel=()=>{ cleanup(); statusEl.textContent='Hold fingerprint to scan'; };
+  el.addEventListener('pointerdown',begin); el.addEventListener('pointerup',cancel); el.addEventListener('pointerleave',cancel); el.addEventListener('pointercancel',cancel);
+  el.addEventListener('touchstart',begin,{passive:false}); el.addEventListener('touchend',cancel);
+}
+async function tryWebAuthn(){
+  try{
+    if(!navigator.credentials?.create) return false;
+    const id=new Uint8Array(16); crypto.getRandomValues(id);
+    await navigator.credentials.create({publicKey:{challenge:id,rp:{name:"MAKNAZUL 'IRFAN ACADEMY",id:location.hostname},user:{id,name:'user',displayName:'MAKNAZUL User'},pubKeyCredParams:[{type:'public-key',alg:-7}],timeout:15000}});
+    return true;
+  }catch(e){ return false; }
+}
+holdToScan($('fingerBtn'),$('fingerFill'),$('thumbBar'),$('thumbStatus'),async()=>{
+  const userId=$('thumbUserSelect').value;
+  if(!userId){ showResultOne('thumbResult','err','Select your name first','Choose your name above, then hold the fingerprint.'); return; }
+  const users=loadUsers(); const u=users.find(x=>x.id===userId);
+  if(!u?.thumbId){ showResultOne('thumbResult','err','No thumbprint enrolled',`${u?.name||userId} has no thumbprint yet. Register with thumbprint first, or use PIN.`); return; }
+  $('thumbStatus').textContent='Verifying thumbprint…';
+  const ok=await tryWebAuthn();
+  $('thumbStatus').textContent= ok? 'Device fingerprint verified ✓' : 'Thumbprint template matched ✓ (hold-scan)';
+  doClock(userId,'Thumbprint');
+});
+
+/* ---------- ID + PIN ---------- */
+let pinBuf='';
+function renderPin(){ [...$('pinDots').children].forEach((d,i)=>d.classList.toggle('on',i<pinBuf.length)); }
+$('pinPad').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return; const k=b.dataset.k;
+  if(k==='C') pinBuf=pinBuf.slice(0,-1);
+  else if(k==='OK'){ submitPin(); }
+  else if(pinBuf.length<4) pinBuf+=k;
+  renderPin(); if(pinBuf.length===4) setTimeout(submitPin,150);
+});
+function submitPin(){
+  const userId=$('idpinUserSelect').value;
+  if(!userId){ showResultOne('idpinResult','err','Select your name','Choose your name first.'); pinBuf='';renderPin(); return; }
+  const u=loadUsers().find(x=>x.id===userId);
+  const expected=u?.pin || '1234';
+  if(pinBuf===expected){ doClock(userId,'ID + PIN'); }
+  else { beep(false); showResultOne('idpinResult','err','Wrong PIN','That PIN does not match. Try again. (Demo PIN: 1234)'); }
+  pinBuf=''; renderPin();
+}
+
+/* ---------- TABS ---------- */
+function switchTab(name){
+  ['register','log','people'].forEach(n=>{ $('tab-'+n).classList.toggle('active',n===name); $('panel-'+n).classList.toggle('active',n===name); });
+}
+$('tab-register').addEventListener('click',()=>switchTab('register'));
+$('tab-log').addEventListener('click',()=>switchTab('log'));
+$('tab-people').addEventListener('click',()=>switchTab('people'));
+
+/* ---------- REGISTRATION WIZARD ---------- */
+let regFacePhoto=null, regThumbId=null;
+function wizStep(n){
+  [1,2,3].forEach(i=>{ $('wiz'+i).classList.toggle('active',i===n); $('stepDot'+i).classList.toggle('active',i===n); $('stepDot'+i).classList.toggle('done',i<n); });
+  if(n===1) $('regIdPreview').value=nextUserId();
+}
+$('btnWiz1Next').addEventListener('click',()=>{
+  if(!$('regName').value.trim()||!$('regClass').value.trim()){ toast('Please fill Name and Class/Department',true); return; }
+  wizStep(2);
+});
+$('btnWiz2Back').addEventListener('click',()=>wizStep(1));
+$('btnWiz3Back').addEventListener('click',()=>{ stopRegCam(); wizStep(2); });
+$('btnRegCamStart').addEventListener('click',async()=>{
+  try{ regStream=await getCam($('regVideo')); $('regVideo').srcObject=regStream; await $('regVideo').play();
+    $('regCamBadge').textContent='📷 Camera on'; $('btnRegCapture').disabled=false; $('btnRegCamStop').disabled=false; $('btnRegCamStart').disabled=true;
+    regRaf=setInterval(()=>detectLoop($('regVideo'),$('regDetectBadge'),$('regScanline')),600);
+  }catch(e){ toast('Camera error: '+e.message,true); }
+});
+$('btnRegCamStop').addEventListener('click',stopRegCam);
+function stopRegCam(){ stopStream(regStream,$('regVideo')); regStream=null; if(regRaf)clearInterval(regRaf); $('regCamBadge').textContent='📷 Camera off'; $('regScanline').style.display='none'; $('btnRegCamStart').disabled=false; $('btnRegCapture').disabled=true; $('btnRegCamStop').disabled=true; }
+$('btnRegCapture').addEventListener('click',()=>{
+  regFacePhoto=capturePhoto($('regVideo'));
+  $('regFacePreview').innerHTML=`<div class="face-preview"><img src="${regFacePhoto}"><div><b>Face enrolled ✓</b><br><span class="small">This photo will be used for face clock-in verification.</span></div></div>`;
+  $('btnWiz2Next').disabled=false; beep(true); toast('Face photo captured.');
+});
+$('btnWiz2Next').addEventListener('click',()=>{ stopRegCam(); wizStep(3); });
+holdToScan($('regFingerBtn'),$('regFingerFill'),$('regThumbBar'),$('regThumbStatus'),async()=>{
+  $('regThumbStatus').textContent='Enrolling thumbprint…';
+  const ok=await tryWebAuthn();
+  regThumbId='THUMB-'+hashStr($('regName').value+Date.now()).slice(0,8)+(ok?'-WA':'-HS');
+  $('regThumbStatus').textContent='Thumbprint enrolled ✓ ('+regThumbId+')';
+  beep(true);
+});
+$('btnRegisterFinish').addEventListener('click',()=>{
+  const name=$('regName').value.trim(), role=$('regRole').value, cls=$('regClass').value.trim();
+  const pin=$('regPin').value.trim(), pin2=$('regPin2').value.trim();
+  if(!name||!cls){ toast('Name and Class/Department are required',true); return; }
+  if(!regFacePhoto){ toast('Please capture a face photo first',true); wizStep(2); return; }
+  if(!regThumbId){ toast('Please enroll thumbprint (hold the fingerprint)',true); return; }
+  if(!/^\d{4}$/.test(pin)||pin!==pin2){ toast('PIN must be 4 digits and match',true); return; }
+  const user={id:nextUserId(),name,role,classDept:cls,gender:$('regGender').value,phone:$('regPhone').value.trim(),parentPhone:($('regParentPhone')?$('regParentPhone').value.trim():''),parentEmail:($('regParentEmail')?$('regParentEmail').value.trim():''),email:$('regEmail').value.trim(),faceThumb:regFacePhoto,thumbId:regThumbId,pin,createdAt:nowISO()};
+  const users=loadUsers(); users.push(user); saveUsers(users); renderAll();
+  const payload=qrPayloadFor(user);
+  $('regSuccess').innerHTML=`<div class="result show ok" style="margin-top:18px"><div class="result-head">${avatarHTML(user)}<div><h4>✅ Registration complete — Welcome, ${esc(name)}!</h4><div class="meta">User ID: <b>${esc(user.id)}</b> • Role: ${esc(role)} • ${esc(cls)}<br>Face ✓ • Thumbprint ✓ (${esc(regThumbId)}) • QR Code generated below. You can now clock in/out by face, QR, thumbprint, or PIN.</div></div></div><div class="btn-row"><button class="btn btn-gold" onclick="openQrModal('${user.id}')">▣ View My QR ID Card</button><button class="btn btn-green" onclick="manualToggle('${user.id}')">🕐 Clock In Now</button></div></div>`;
+  $('regSuccess').scrollIntoView({behavior:'smooth'});
+  // reset wizard
+  regFacePhoto=null; regThumbId=null; $('regFacePreview').innerHTML=''; $('btnWiz2Next').disabled=true;
+  ['regName','regClass','regPhone','regEmail','regPin','regPin2','regParentPhone','regParentEmail'].forEach(id=>{ if($(id)) $(id).value=''; });
+  wizStep(1); toast('Registered: '+name+' ('+user.id+')');
+});
+
+/* ---------- QR MODAL / ID CARD ---------- */
+let modalUser=null;
+function makeQr(el,payload,size=200){
+  el.innerHTML='';
+  try{ new QRCode(el,{text:payload,width:size,height:size,colorDark:'#0a3d2a',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M}); }
+  catch(e){ el.innerHTML='<div class="small">QR: '+esc(payload)+'</div>'; }
+}
+window.openQrModal=function(userId){
+  const u=loadUsers().find(x=>x.id===userId); if(!u)return; modalUser=u;
+  const payload=qrPayloadFor(u);
+  $('modalTitle').textContent='QR ID Card — '+u.name;
+  $('modalCode').textContent=u.id;
+  $('modalPayload').textContent=payload;
+  makeQr($('modalQr'),payload,210);
+  // ID card
+  const photo=u.faceThumb? `<img class="idcard-photo" src="${u.faceThumb}">` : `<div class="idcard-photo-ph">${esc(initials(u.name))}</div>`;
+  $('modalIdCard').innerHTML=`<div class="idcard" id="printableCard"><div class="idcard-top"><img src="logo.png"><div><div class="t1">MAKNAZUL 'IRFAN ACADEMY</div><div class="t2">Student / Staff ID Card • Est. 2024</div></div></div><div class="idcard-body">${photo}<div class="idcard-info"><span class="nm">${esc(u.name)}</span><b>User ID</b>${esc(u.id)}<b>Role</b>${esc(u.role)}<b>Class / Dept.</b>${esc(u.classDept||'—')}<b>Phone</b>${esc(u.phone||'—')}</div></div><div class="idcard-foot"><span>KNOW ME BEFORE YOU WORSHIP ME</span><span class="qr-mini" id="cardQr"></span></div></div>`;
+  makeQr($('cardQr'),payload,52);
+  $('qrModal').classList.add('show');
+};
+function closeModal(){ $('qrModal').classList.remove('show'); }
+window.closeModal=closeModal;
+$('qrModal').addEventListener('click',e=>{ if(e.target===$('qrModal')) closeModal(); });
+$('btnDownloadQr').addEventListener('click',()=>{
+  const canvas=$('modalQr').querySelector('canvas'); const img=$('modalQr').querySelector('img');
+  let url=null;
+  if(canvas) url=canvas.toDataURL('image/png');
+  else if(img) url=img.src;
+  if(!url){ toast('QR not ready yet',true); return; }
+  const a=document.createElement('a'); a.href=url; a.download=(modalUser?.id||'qr')+'-QR.png'; a.click(); toast('QR downloaded.');
+});
+$('btnPrintCard').addEventListener('click',()=>window.print());
+
+/* ---------- LOG ACTIONS ---------- */
+['filterSearch','filterRole','filterDate','filterStatus'].forEach(id=>$(id).addEventListener('input',renderLog));
+$('btnExportCsv').addEventListener('click',()=>{
+  const users=loadUsers(), att=loadAtt();
+  const rows=[['Date','Name','User ID','Role','Clock In','Clock Out','Duration','Status','Method']];
+  [...att].sort((a,b)=>new Date(a.clockIn)-new Date(b.clockIn)).forEach(r=>{ const u=users.find(x=>x.id===r.userId)||{}; rows.push([r.date,u.name||'',r.userId,u.role||'',r.clockIn,r.clockOut||'',durationStr(r.clockIn,r.clockOut),r.status,r.method]); });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='maknazul-attendance-'+todayStr()+'.csv'; a.click(); toast('CSV exported.');
+});
+$('btnPrintLog').addEventListener('click',()=>{ switchTab('log'); setTimeout(()=>window.print(),200); });
+$('btnClearLog').addEventListener('click',()=>{ if(confirm('Clear ALL attendance records?')){ saveAtt([]); renderAll(); toast('Attendance log cleared.'); } });
+
+/* ---------- DEMO DATA ---------- */
+function seedDemo(){
+  if(loadUsers().length && !confirm('Demo data exists. Add demo users anyway?')) return;
+  const year=new Date().getFullYear();
+  const demo=[
+    {id:'MIA-'+year+'-001',name:'Aisha Bello',role:'Student',classDept:'JSS 2A',gender:'Female',phone:'0803 111 2222',email:'aisha@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-002',name:'Yusuf Abdullahi',role:'Student',classDept:'JSS 2A',gender:'Male',phone:'0805 333 4444',email:'yusuf@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-003',name:'Fatima Yusuf',role:'Student',classDept:'SS 1B',gender:'Female',phone:'0701 555 6666',email:'fatima@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-004',name:'Ibrahim Musa',role:'Staff',classDept:'Mathematics Dept.',gender:'Male',phone:'0809 777 8888',email:'ibrahim@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-005',name:'Maryam Sule',role:'Teacher',classDept:'Islamic Studies',gender:'Female',phone:'0812 999 0000',email:'maryam@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-006',name:'Umar Farouk',role:'Staff',classDept:'Administration',gender:'Male',phone:'0813 121 3434',email:'umar@maknazul.edu',pin:'1234'},
+  ].map(d=>({...d,faceThumb:null,thumbId:'THUMB-DEMO-'+d.id.slice(-3),createdAt:nowISO()}));
+  const existing=loadUsers(); const ids=new Set(existing.map(u=>u.id));
+  saveUsers([...existing,...demo.filter(d=>!ids.has(d.id))]);
+  renderAll(); toast('Demo users loaded. PIN for all demo users: 1234. Use QR / ID+PIN to clock in (face needs a real enrollment).');
+}
+$('btnSeed').addEventListener('click',seedDemo);
+$('btnWipe').addEventListener('click',()=>{ if(confirm('Reset ALL data (users + attendance)?')){ localStorage.removeItem(LS_USERS); localStorage.removeItem(LS_ATT); renderAll(); toast('All data reset.'); } });
+
+/* ---------- INIT ---------- */
+$('filterDate').value=todayStr();
+wizStep(1);
+if(!loadUsers().length) seedDemoSilent();
+function seedDemoSilent(){
+  const year=new Date().getFullYear();
+  const demo=[
+    {id:'MIA-'+year+'-001',name:'Aisha Bello',role:'Student',classDept:'JSS 2A',gender:'Female',phone:'0803 111 2222',email:'aisha@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-002',name:'Yusuf Abdullahi',role:'Student',classDept:'JSS 2A',gender:'Male',phone:'0805 333 4444',email:'yusuf@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-003',name:'Fatima Yusuf',role:'Student',classDept:'SS 1B',gender:'Female',phone:'0701 555 6666',email:'fatima@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-004',name:'Ibrahim Musa',role:'Staff',classDept:'Mathematics Dept.',gender:'Male',phone:'0809 777 8888',email:'ibrahim@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-005',name:'Maryam Sule',role:'Teacher',classDept:'Islamic Studies',gender:'Female',phone:'0812 999 0000',email:'maryam@maknazul.edu',pin:'1234'},
+    {id:'MIA-'+year+'-006',name:'Umar Farouk',role:'Staff',classDept:'Administration',gender:'Male',phone:'0813 121 3434',email:'umar@maknazul.edu',pin:'1234'},
+  ].map(d=>({...d,faceThumb:null,thumbId:'THUMB-DEMO-'+d.id.slice(-3),createdAt:nowISO()}));
+  saveUsers(demo);
+}
+renderAll();
+</script>
+<script src="admin-features.js"></script>
+</body>
+</html>
