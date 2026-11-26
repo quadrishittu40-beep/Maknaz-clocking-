@@ -69,6 +69,8 @@ function applyAdminUI(){
   const btn=$('btnAdminLogin');
   if(btn){ btn.textContent=admin?'🔓 Admin Panel (Logged In)':'🔐 Admin Login'; btn.classList.toggle('logged',admin); }
   renderAdminOverview(); renderAdminUsers(); renderAdminAlerts(); renderSettingsForm(); updateSyncPill();
+  /* re-render the public tabs so admin-only edit buttons show/hide */
+  if(typeof renderAll==='function'){ try{ renderAll(); }catch(e){} }
 }
 window.openAdminLogin=function(){
   if(isAdmin()){ switchTab('admin'); return; }
@@ -612,7 +614,7 @@ function buildPanel(){
 function buildLoginModal(){
   const m=document.createElement('div'); m.className='modal'; m.id='adminLoginModal';
   m.innerHTML='<div class="modal-box login-box" style="text-align:center">'
-    +'<div class="logo-badge"><img src="logo.png" style="width:100%;height:100%;object-fit:contain" alt="logo"></div>'
+    +'<div class="logo-badge"><img src="assets/logo.png" style="width:100%;height:100%;object-fit:contain" alt="logo"></div>'
     +'<h3>🛡️ Admin Login</h3><p class="small">Admins only — manage sync, alerts &amp; settings.</p>'
     +'<div class="field" style="text-align:left;margin-top:12px"><label>Admin email</label><input id="adminEmail" placeholder="maknazulirfanacademy@gmail.com"></div>'
     +'<div class="field" style="text-align:left;margin-top:10px"><label>Password</label><input id="adminPw" type="password" placeholder="••••••••" onkeydown="if(event.key===\'Enter\')doAdminLogin()"></div>'

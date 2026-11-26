@@ -235,8 +235,8 @@ footer b{color:var(--green-900)}
   <div class="wrap topbar-inner">
     <div class="logo-badge"><img src="logo.png" alt="MAKNAZUL 'IRFAN ACADEMY logo"></div>
     <div class="brand">
-      <h1>MAKNAZUL <span>'IRFAN</span> ACADEMY</h1>
-      <p>Smart Clock In / Out System &nbsp;•&nbsp; Students &amp; Staff</p>
+      <h1 id="brandTitle">MAKNAZUL <span>'IRFAN</span> ACADEMY</h1>
+      <p id="brandSub">Smart Clock In / Out System &nbsp;•&nbsp; Students &amp; Staff</p>
     </div>
     <div class="top-clock">
       <div class="time"><span class="live-dot"></span><span id="liveTime">--:--:--</span></div>
@@ -512,8 +512,8 @@ footer b{color:var(--green-900)}
 
   <footer>
     <b>MAKNAZUL 'IRFAN ACADEMY</b> — Know Me Before You Worship Me • Est. 2024<br>
-    Smart Clock In/Out System • Face Detection + Thumbprint + QR Code • Data saved locally in your browser (localStorage).<br>
-    For multi-device / cloud sync, connect Supabase or Google Sheets and deploy this folder to Vercel.
+    Smart Clock In/Out System • Face Detection + Thumbprint + QR Code<br>
+    <span id="footerNote">Data syncs to Google Sheets when the backend is connected.</span>
   </footer>
 </div>
 
@@ -639,7 +639,7 @@ function renderLog(){
   $('logBody').innerHTML=rows.length? rows.map(r=>{
     const u=users.find(x=>x.id===r.userId)||{name:'(removed)',role:'—'};
     const tagCls=r.status==='Present'?'present':(r.status==='Late'?'late':'verylate');
-    return `<tr><td>${fmtDateShort(r.date)}</td><td><b>${esc(u.name)}</b></td><td>${esc(r.userId)}</td><td>${esc(u.role)}</td><td>${fmtTime(r.clockIn)}</td><td>${r.clockOut?fmtTime(r.clockOut):'<span class="tag in">On site</span>'}</td><td>${durationStr(r.clockIn,r.clockOut)}</td><td><span class="tag ${tagCls}">${esc(r.status)}</span></td><td>${esc(r.method)}</td><td><button class="mini-btn" onclick="deleteRecord('${r.id}')">🗑</button></td></tr>`;
+    return `<tr><td>${fmtDateShort(r.date)}</td><td><b>${esc(u.name)}</b></td><td>${esc(r.userId)}</td><td>${esc(u.role)}</td><td>${fmtTime(r.clockIn)}</td><td>${r.clockOut?fmtTime(r.clockOut):'<span class="tag in">On site</span>'}</td><td>${durationStr(r.clockIn,r.clockOut)}</td><td><span class="tag ${tagCls}">${esc(r.status)}</span></td><td>${esc(r.method)}</td><td style="white-space:nowrap"><button class="mini-btn admin-only-flex" onclick="editRecord('${r.id}')">✏️</button> <button class="mini-btn" onclick="deleteRecord('${r.id}')">🗑</button></td></tr>`;
   }).join('') : '<tr><td colspan="10" style="text-align:center;padding:26px;color:var(--muted)">No records match your filters.</td></tr>';
   $('logCount').textContent='Showing '+rows.length+' record(s) • Total in system: '+att.length;
 }
@@ -655,7 +655,7 @@ function renderPeople(){
     else if(rec && rec.clockOut) statusHTML='<span class="status-dot done"></span>Out at '+fmtTime(rec.clockOut);
     return `<div class="person"><div class="person-top">${avatarHTML(u)}<div><h4>${esc(u.name)}</h4><div class="id">${esc(u.id)} • ${esc(u.role)}</div><div style="font-size:12.5px;margin-top:3px">${statusHTML}</div></div></div>
     <div class="meta">${esc(u.classDept||'')} • ${esc(u.gender||'')}<br>📱 ${esc(u.phone||'—')} ${u.thumbId?'• 👆 Thumbprint ✓':'• 👆 No thumbprint'} ${u.faceThumb?'• 😊 Face ✓':'• 😊 No face photo'}</div>
-    <div class="actions"><button class="mini-btn gold" onclick="openQrModal('${u.id}')">▣ QR Card</button><button class="mini-btn green" onclick="manualToggle('${u.id}')">🕐 Clock In/Out</button><button class="mini-btn" onclick="deleteUser('${u.id}')">🗑</button></div></div>`;
+    <div class="actions"><button class="mini-btn gold" onclick="openQrModal('${u.id}')">▣ QR Card</button><button class="mini-btn green" onclick="manualToggle('${u.id}')">🕐 Clock In/Out</button><button class="mini-btn admin-only-flex" onclick="editUser('${u.id}')">✏️ Edit</button><button class="mini-btn admin-only-flex" onclick="pdfProfile('${u.id}')">📄 PDF</button><button class="mini-btn" onclick="deleteUser('${u.id}')">🗑</button></div></div>`;
   }).join('');
 }
 window.deleteUser=function(id){ if(!confirm('Delete this person and their attendance?'))return; saveUsers(loadUsers().filter(u=>u.id!==id)); saveAtt(loadAtt().filter(r=>r.userId!==id)); renderAll(); toast('Person deleted.'); };
@@ -1018,6 +1018,8 @@ function seedDemoSilent(){
 }
 renderAll();
 </script>
+<script src="jspdf.umd.min.js"></script>
 <script src="admin-features.js"></script>
+<script src="admin-edit.js"></script>
 </body>
 </html>
