@@ -506,7 +506,7 @@ function drawRecords(doc, M, img){
   let page=1;
   M.rows.forEach(function(r,i){
     if(y>262){
-      footer(doc,page,0); doc.addPage(); page++;
+      doc.addPage(); page++;
       y=20; head(); doc.setFontSize(7.6);
     }
     if(i%2===0){ doc.setFillColor(250,248,240); doc.rect(14,y,W-28,6.2,'F'); }
@@ -535,7 +535,7 @@ function drawRecords(doc, M, img){
 }
 
 // expose for testing outside the browser
-window.MIAPDF={ buildProfileModel, buildRecordsModel, drawProfile, drawRecords };
+window.MIAPDF={ buildProfileModel, buildRecordsModel, drawProfile, drawRecords, buildAbsenteeModel, drawAbsentees };
 
 /* ------------------------------------------------------- PDF wrappers */
 function getJsPDF(){
@@ -683,15 +683,302 @@ function addLogButton(){
   bar.parentNode.insertBefore(b, bar.nextSibling);
 }
 
+/* ========================= DAILY ABSENTEES =========================
+   For every day in a range: everyone who never clocked in.
+   Students and staff are kept apart, in one file or two.            */
+function isoDay(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+function todayISO(){ return isoDay(new Date()); }
+function monthStartISO(){ const d=new Date(); d.setDate(1); return isoDay(d); }
+function dayList(from,to){
+  const out=[];
+  if(!from||!to) return out;
+  const a=new Date(from+'T00:00:00'), b=new Date(to+'T00:00:00');
+  if(isNaN(a)||isNaN(b)||a>b) return out;
+  for(let d=new Date(a); d<=b && out.length<800; d.setDate(d.getDate()+1)) out.push(isoDay(d));
+  return out;
+}
+function longDay(iso){
+  const d=new Date(iso+'T00:00:00');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'short',year:'numeric'});
+}
+function shortDay(iso){
+  const d=new Date(iso+'T00:00:00');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short'});
+}
+function registeredOn(u){
+  if(!u.createdAt) return '0000-00-00';
+  const d=new Date(u.createdAt);
+  return isNaN(d)?'0000-00-00':isoDay(d);
+}
+
+function buildAbsenteeModel(users, records, filter, cfg){
+  const s=cfg||{}, f=filter||{};
+  const allUsers=(users||[]).slice();
+  const allRecs=(records||[]);
+  const days=[];
+  dayList(f.from,f.to).forEach(function(date){
+    const dow=new Date(date+'T00:00:00').getDay();
+    if(f.skipWeekend && (dow===0||dow===6)) return;
+    const todays=allRecs.filter(function(r){ return r.date===date; });
+    if(f.skipEmpty && !todays.some(function(r){ return !!r.clockIn; })) return;
+    const present={};
+    todays.forEach(function(r){ if(r.clockIn) present[r.userId]=1; });
+    const eligible=allUsers.filter(function(u){ return registeredOn(u)<=date; });
+    const absent=eligible.filter(function(u){ return !present[u.id]; });
+    const stu=absent.filter(function(u){ return groupOf_(u.role)==='Student'; })
+                    .sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+    const sta=absent.filter(function(u){ return groupOf_(u.role)!=='Student'; })
+                    .sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+    const stuAll=eligible.filter(function(u){ return groupOf_(u.role)==='Student'; }).length;
+    const staAll=eligible.length-stuAll;
+    days.push({
+      date:date, dow:dow,
+      students:stu.map(pickPersonFields), staff:sta.map(pickPersonFields),
+      totals:{ studentAbsent:stu.length, staffAbsent:sta.length, studentAll:stuAll, staffAll:staAll, present:Object.keys(present).length }
+    });
+  });
+  const sum={ studentAbsent:0, staffAbsent:0, studentAll:0, staffAll:0 };
+  days.forEach(function(d){ sum.studentAbsent+=d.totals.studentAbsent; sum.staffAbsent+=d.totals.staffAbsent; sum.studentAll+=d.totals.studentAll; sum.staffAll+=d.totals.staffAll; });
+  return {
+    school:{
+      name:s.schoolName||"MAKNAZUL 'IRFAN ACADEMY",
+      tagline:s.schoolTagline||'Smart Clock In / Out System',
+      address:s.schoolAddress||'', phone:s.schoolPhone||''
+    },
+    range:{ from:f.from, to:f.to },
+    filters:{ skipEmpty:!!f.skipEmpty, skipWeekend:!!f.skipWeekend },
+    days:days,
+    totals:sum,
+    generated:new Date()
+  };
+}
+function groupOf_(role){ return String(role||'')==='Student' ? 'Student' : 'Staff'; }
+function pickPersonFields(u){
+  return { name:u.name||'', id:u.id||'', role:u.role||'', classDept:u.classDept||'', phone:u.phone||'', parentPhone:u.parentPhone||'' };
+}
+
+/* ---------------- PDF ---------------- */
+function drawAbsentees(doc, M, opts){
+  const o=opts||{}, W=210;
+  const only=o.only||null;           /* 'student' | 'staff' | null (both) */
+  const title=only==='student'?'Daily Absentee Report - Students'
+             :(only==='staff'?'Daily Absentee Report - Staff':'Daily Absentee Report');
+  header(doc, M.school, 'Attendance / Absentees');
+  let y=40;
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(30,30,30);
+  doc.text(title, 14, y); y+=6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+  const bits=['Period: '+(M.range.from||'?')+'  to  '+(M.range.to||'?'), 'Days reported: '+M.days.length];
+  if(!only) bits.push('Students absent: '+M.totals.studentAbsent+'   Staff absent: '+M.totals.staffAbsent);
+  else if(only==='student') bits.push('Student absences: '+M.totals.studentAbsent);
+  else bits.push('Staff absences: '+M.totals.staffAbsent);
+  doc.text(bits.join('     |     '), 14, y); y+=4;
+  if(o.note){ doc.setFontSize(7.5); doc.text(o.note, 14, y); y+=3; }
+  y+=4;
+
+  const pageW=W-28;
+  function need(h){ if(y+h>272){ doc.addPage(); header(doc,M.school,'Attendance / Absentees'); y=40; } }
+  function personTable(list, tone){
+    const cols=[[16,'#',8],[26,'Name',62],[90,'User ID',34],[126,'Class / Dept',34],[162,'Guardian phone',34]];
+    doc.setFillColor(tone[0],tone[1],tone[2]);
+    need(9);
+    doc.rect(14,y,pageW,6.5,'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7.6);
+    cols.forEach(function(c){ doc.text(String(c[1]), c[0], y+4.4); });
+    doc.setFont('helvetica','normal'); y+=6.5;
+    doc.setTextColor(30,30,30); doc.setFontSize(7.6);
+    list.forEach(function(p,i){
+      need(6.2);
+      if(i%2===0){ doc.setFillColor(250,248,240); doc.rect(14,y,pageW,6.2,'F'); }
+      const vals=[String(i+1), p.name, p.id, p.classDept||'-', p.parentPhone||'-'];
+      const maxc=[3,34,18,18,18];
+      cols.forEach(function(c,j){
+        let v=String(vals[j]==null?'':vals[j]);
+        if(v.length>maxc[j]) v=v.slice(0,maxc[j]-1)+'.';
+        doc.text(v, c[0], y+4.2);
+      });
+      y+=6.2;
+    });
+    y+=3;
+  }
+  function sectionLabel(txt){ need(20); doc.setFont('helvetica','bold'); doc.setFontSize(8.4); doc.setTextColor(GREEN[0],GREEN[1],GREEN[2]); doc.text(txt,14,y+4); doc.setFont('helvetica','normal'); y+=6; }
+  function noneLine(txt){ need(7); doc.setFontSize(8); doc.setTextColor(GREY[0],GREY[1],GREY[2]); doc.text(txt,16,y+4); doc.setTextColor(30,30,30); y+=8; }
+
+  if(!M.days.length){
+    doc.setFontSize(9.5); doc.setTextColor(30,30,30);
+    doc.text('No days in this period match the filters (nothing was recorded).', 14, y+4);
+    y+=10;
+  }
+
+  M.days.forEach(function(d){
+    need(38);
+    /* day bar */
+    doc.setFillColor(LIGHT[0],LIGHT[1],LIGHT[2]);
+    doc.roundedRect(14,y,pageW,9,1.6,1.6,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(GREEN[0],GREEN[1],GREEN[2]);
+    doc.text(longDay(d.date), 17, y+6);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.6); doc.setTextColor(GREY[0],GREY[1],GREY[2]);
+    const tail=only==='student' ? (d.totals.studentAbsent+' of '+d.totals.studentAll+' students absent')
+              :(only==='staff'  ? (d.totals.staffAbsent+' of '+d.totals.staffAll+' staff absent')
+              : (d.totals.studentAbsent+'/'+d.totals.studentAll+' students   '+d.totals.staffAbsent+'/'+d.totals.staffAll+' staff'));
+    doc.text(tail, W-17, y+6, {align:'right'});
+    y+=13;
+
+    if(only!=='staff'){
+      sectionLabel('STUDENTS ABSENT ('+d.students.length+')');
+      if(d.students.length) personTable(d.students,GREEN); else noneLine('None - every student clocked in. Ma sha Allah!');
+    }
+    if(only!=='student'){
+      sectionLabel('STAFF ABSENT ('+d.staff.length+')');
+      if(d.staff.length) personTable(d.staff,GOLD); else noneLine('None - every member of staff clocked in.');
+    }
+    y+=2;
+  });
+
+  /* summary block */
+  need(24);
+  doc.setDrawColor(220,215,200); doc.line(14,y,W-14,y); y+=7;
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(30,30,30);
+  if(!only){
+    doc.text('TOTAL: '+M.totals.studentAbsent+' student absences, '+M.totals.staffAbsent+' staff absences over '+M.days.length+' day(s).', 14, y);
+  } else if(only==='student'){
+    doc.text('TOTAL: '+M.totals.studentAbsent+' student absences over '+M.days.length+' day(s).', 14, y);
+  } else {
+    doc.text('TOTAL: '+M.totals.staffAbsent+' staff absences over '+M.days.length+' day(s).', 14, y);
+  }
+
+  const total=doc.getNumberOfPages();
+  for(let p=1;p<=total;p++){ doc.setPage(p); footer(doc,p,total); }
+  doc.setPage(1);
+  return doc;
+}
+
+/* ---------------- UI + exports ---------------- */
+function absenteeFilter(){
+  const from=($('absFrom')&&$('absFrom').value)||monthStartISO();
+  const to=($('absTo')&&$('absTo').value)||todayISO();
+  return {
+    from:from, to:to,
+    skipEmpty:$('absSkipEmpty')?!!$('absSkipEmpty').checked:true,
+    skipWeekend:$('absSkipWeekend')?!!$('absSkipWeekend').checked:false
+  };
+}
+function absenteeOutput(){ return ($('absOutput')&&$('absOutput').value)||'one'; }
+function absenteeModel(){
+  return buildAbsenteeModel(loadJSON(LS_USERS,[]), loadJSON(LS_ATT,[]), absenteeFilter(), settings());
+}
+function absenteeNote(M){
+  const bits=[];
+  if(M.filters.skipEmpty) bits.push('days with no clock-ins omitted');
+  if(M.filters.skipWeekend) bits.push('Saturdays and Sundays skipped');
+  return bits.length?('Filters: '+bits.join('; ')+'.'):'';
+}
+window.pdfAbsentees=async function(){
+  if(needAdmin()) return;
+  const JsPDF=getJsPDF();
+  if(!JsPDF){ toast('PDF library not loaded.',true); return; }
+  const f=absenteeFilter();
+  if(!f.from||!f.to){ toast('Pick a From and To date.',true); return; }
+  if(f.from>f.to){ toast('From date is after To date.',true); return; }
+  const M=absenteeModel();
+  if(!M.days.length){ toast('Nothing to report for those dates — try a wider range.',true); return; }
+  toast('Building absentee report…');
+  const note=absenteeNote(M);
+  const tag=f.from.replace(/-/g,'')+'-'+f.to.replace(/-/g,'');
+  if(absenteeOutput()==='two'){
+    const d1=new JsPDF({unit:'mm',format:'a4'});
+    drawAbsentees(d1,M,{only:'student',note:note});
+    d1.save('maknazul-absentees-students-'+tag+'.pdf');
+    const d2=new JsPDF({unit:'mm',format:'a4'});
+    drawAbsentees(d2,M,{only:'staff',note:note});
+    d2.save('maknazul-absentees-staff-'+tag+'.pdf');
+    toast('Two PDFs built: students and staff.');
+  } else {
+    const doc=new JsPDF({unit:'mm',format:'a4'});
+    drawAbsentees(doc,M,{note:note});
+    doc.save('maknazul-absentees-'+tag+'.pdf');
+    toast('Absentee PDF built: '+M.days.length+' day(s).');
+  }
+};
+
+function csvEsc(v){ const s=String(v==null?'':v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+window.csvAbsentees=function(){
+  if(needAdmin()) return;
+  const f=absenteeFilter();
+  if(!f.from||!f.to||f.from>f.to){ toast('Check the From / To dates.',true); return; }
+  const M=absenteeModel();
+  if(!M.days.length){ toast('Nothing to report for those dates.',true); return; }
+  const rows=[['Date','Group','Name','User ID','Class / Dept','Guardian phone']];
+  M.days.forEach(function(d){
+    d.students.forEach(function(p){ rows.push([d.date,'Student',p.name,p.id,p.classDept,p.parentPhone]); });
+    d.staff.forEach(function(p){ rows.push([d.date,'Staff',p.name,p.id,p.classDept,p.parentPhone]); });
+  });
+  const text=rows.map(function(r){ return r.map(csvEsc).join(','); }).join('\r\n');
+  const blob=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='maknazul-absentees-'+f.from.replace(/-/g,'')+'-'+f.to.replace(/-/g,'')+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); },1500);
+  toast('CSV built: '+(rows.length-1)+' absent rows.');
+};
+window.previewAbsentees=function(){
+  const box=$('absPreview'); if(!box) return;
+  if(needAdmin()) return;
+  const M=absenteeModel();
+  if(!M.days.length){ box.innerHTML='<div class="empty" style="padding:12px">No days match these filters.</div>'; return; }
+  box.innerHTML='<div class="table-wrap" style="max-height:280px;overflow:auto"><table>'
+    +'<thead><tr><th>Date</th><th>Students absent</th><th>Staff absent</th><th>Name</th></tr></thead><tbody>'
+    +M.days.map(function(d){
+        const names=d.students.map(function(p){ return p.name; }).concat(d.staff.map(function(p){ return p.name+' (staff)'; }));
+        return '<tr><td>'+esc(shortDay(d.date))+'</td><td><b>'+d.totals.studentAbsent+'</b> / '+d.totals.studentAll+'</td>'
+             +'<td><b>'+d.totals.staffAbsent+'</b> / '+d.totals.staffAll+'</td>'
+             +'<td class="small">'+(names.length?esc(names.join(', ')):'nobody - all present')+'</td></tr>';
+      }).join('')
+    +'</tbody></table></div>'
+    +'<p class="small" style="margin:8px 0 0">'+M.days.length+' day(s) &bull; '+M.totals.studentAbsent+' student absences &bull; '+M.totals.staffAbsent+' staff absences</p>';
+};
+
+function buildAbsenteeCard(){
+  const sub=$('sub-settings'); if(!sub || $('absenteeCard')) return;
+  const card=document.createElement('div');
+  card.className='admin-card'; card.id='absenteeCard';
+  card.innerHTML='<h4>\uD83D\uDDD3\uFE0F Daily absentees (students and staff)</h4>'
+    +'<p class="small">Everyone who never clocked in on a day. Each day is listed with its <b>students</b> and <b>staff</b> kept apart, all in one file.</p>'
+    +'<div class="form-grid">'
+      +'<div class="field"><label>From</label><input type="date" id="absFrom" value="'+monthStartISO()+'"></div>'
+      +'<div class="field"><label>To</label><input type="date" id="absTo" value="'+todayISO()+'"></div>'
+    +'</div>'
+    +'<div class="switch-row"><input type="checkbox" id="absSkipEmpty" checked> Skip days with no clock-ins at all</div>'
+    +'<div class="switch-row"><input type="checkbox" id="absSkipWeekend"> Skip Saturdays &amp; Sundays</div>'
+    +'<div class="field" style="margin-top:8px"><label>Output</label><select id="absOutput">'
+      +'<option value="one">\u2B50 One file - students and staff in two sections</option>'
+      +'<option value="two">Two files - one for students, one for staff</option>'
+    +'</select></div>'
+    +'<div id="absPreview" style="margin-top:10px"></div>'
+    +'<div class="btn-row">'
+      +'<button class="btn btn-gold" onclick="pdfAbsentees()">\uD83D\uDCC4 Absentees PDF</button>'
+      +'<button class="btn btn-green" onclick="csvAbsentees()">\u2B07 Absentees CSV</button>'
+      +'<button class="btn btn-ghost" onclick="previewAbsentees()">\uD83D\uDC41 Preview</button>'
+    +'</div>';
+  sub.appendChild(card);
+}
+
 /* --------------------------------------------------------------- init */
 function init(){
   applyBranding();
   buildIdentityCard();
   buildPdfCard();
+  buildAbsenteeCard();
   addLogButton();
   document.addEventListener('click',function(e){
     const tab=e.target.closest && e.target.closest('.admin-subtab');
-    if(tab && tab.dataset.sub==='settings'){ setTimeout(function(){ buildIdentityCard(); buildPdfCard(); },50); }
+    if(tab && tab.dataset.sub==='settings'){ setTimeout(function(){ buildIdentityCard(); buildPdfCard(); buildAbsenteeCard(); },50); }
     const panel=e.target.closest && e.target.closest('#tab-log, #btnAdminLogin');
     if(panel){ setTimeout(addLogButton,120); }
   });
