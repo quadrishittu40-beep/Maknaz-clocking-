@@ -63,6 +63,11 @@ window.editUser=function(id){
       +'<div><div class="field" style="margin:0"><label>Face photo</label><input type="file" accept="image/*" id="euPhotoFile"></div>'
       +'<button class="mini-btn" style="margin-top:6px" onclick="removeUserPhoto()">Remove photo</button></div>'
     +'</div>'
+    +'<div class="divider"></div>'
+    +'<div class="field" style="margin:0"><label>Fingerprint on this device</label>'
+      +'<p class="small" style="margin:0 0 6px">Status: <b id="euBioState">'+(u.thumbCred?'verified reader bound ✓':(u.thumbId?'enrolled (old, not verified)':'not enrolled'))+'</b></p>'
+      +'<button class="mini-btn green" onclick="bindFingerprint(\''+u.id+'\')">👆 Bind fingerprint on this device</button>'
+      +'</div>'
     +'<div class="btn-row" style="margin-top:16px">'
       +'<button class="btn btn-green" onclick="saveUserEdit(\''+u.id+'\')">💾 Save changes</button>'
       +'<button class="btn btn-gold" onclick="pdfProfile(\''+u.id+'\')">📄 PDF profile</button>'
@@ -84,6 +89,30 @@ window.removeUserPhoto=function(){
   toast('Photo will be removed on save.');
 };
 
+window.bindFingerprint=function(id){
+  if(needAdmin()) return;
+  const bio=window.MIABio;
+  if(!bio){ toast('Fingerprint engine not loaded.',true); return; }
+  if(!bio.supported()){ toast('This browser cannot read fingerprints.',true); return; }
+  const users=loadJSON(LS_USERS,[]);
+  const u=users.find(x=>x.id===id);
+  if(!u){ toast('Person not found.',true); return; }
+  bio.available().then(function(ok){
+    if(!ok){ toast('No fingerprint sensor or FIDO2 reader on this device.',true); return; }
+    toast('Ask '+u.name+' to place the finger on the sensor…');
+    return bio.enrol(u.name).then(function(credId){
+      if(!credId){ toast('Fingerprint capture cancelled or failed.',true); return; }
+      u.thumbCred=credId;
+      u.thumbId='THUMB-'+String(credId).slice(0,8).replace(/[^a-z0-9]/gi,'');
+      u.updatedAt=new Date().toISOString();
+      saveJSON(LS_USERS,users);
+      const st=$('euBioState'); if(st){ st.textContent='verified reader bound ✓'; }
+      const th=$('euThumb'); if(th){ th.value=u.thumbId; }
+      toast('Fingerprint verified and bound for '+u.name+'.');
+      resyncSoon();
+    });
+  });
+};
 window.saveUserEdit=function(id){
   if(needAdmin()) return;
   const users=loadJSON(LS_USERS,[]);
@@ -103,7 +132,9 @@ window.saveUserEdit=function(id){
   u.email=($('euEmail').value||'').trim();
   u.parentEmail=($('euParentEmail').value||'').trim();
   u.pin=pin;
-  u.thumbId=($('euThumb').value||'').trim();
+  const newThumb=($('euThumb').value||'').trim();
+  if(newThumb!==(u.thumbId||'')){ u.thumbCred=null; }   /* id changed -> verification must be re-bound */
+  u.thumbId=newThumb;
   if(pendingPhoto!==undefined) u.faceThumb=pendingPhoto;
   u.updatedAt=new Date().toISOString();
 

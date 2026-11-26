@@ -36,11 +36,14 @@ function defaultSettings(){
     alertChannel:'auto',       // auto | sms | whatsapp | email
     twilioSid:'', twilioToken:'', twilioFrom:'', termiiKey:'', termiiFrom:'', waToken:'', waPhoneId:'', webhookUrl:'',
     alertOnIn:true, alertOnOut:true, alertOnLate:true, alertOnAbsent:true, alertAdminSummary:true,
+    /* the admin gets one mail for EVERY clock in and EVERY clock out */
+    alertAdminEvery:true,
     adminPhone:'08084929862', adminEmail:'maknazulirfanacademy@gmail.com', parentAlerts:true, emailStudents:true,
     tplIn:'Assalamu Alaikum {name}! You clocked IN at {time} on {date} at MAKNAZUL \'IRFAN ACADEMY. Status: {status}.',
     tplOut:'Assalamu Alaikum {name}! You clocked OUT at {time} on {date}. Jazakumullahu khairan.',
     tplLate:'Assalamu Alaikum {name}, you arrived LATE at {time} on {date} (school starts {start}). Please try to come earlier tomorrow.',
-    tplAbsent:'Assalamu Alaikum, {name} did not clock in today ({date}) at MAKNAZUL \'IRFAN ACADEMY. Please check.'
+    tplAbsent:'Assalamu Alaikum, {name} did not clock in today ({date}) at MAKNAZUL \'IRFAN ACADEMY. Please check.',
+    tplAdmin:'ADMIN NOTICE - {action}: {name} ({role}{classbit}) - {audience} - at {time} on {date}. Status: {status}. Method: {method}. User ID: {id}.'
   };
 }
 function getSettings(){
@@ -279,6 +282,32 @@ async function sendViaProvider(channel,phone,message){
   return {status:'manual',note:'Manual mode — tap WhatsApp/SMS in the Alert Log to send'};
 }
 
+/* One immediate mail to the admin for every single clocking. */
+async function sendAdminClockAlert(user,action,rec){
+  const s=getSettings();
+  if(!s.alertAdminEvery) return;
+  let to=s.adminEmail;
+  if(!to){ try{ to=getAdmin().email; }catch(e){} }
+  if(!to) to='maknazulirfanacademy@gmail.com';
+  const when=new Date();
+  const vars={
+    name:user.name||user.id,
+    id:user.id||'',
+    role:user.role||'',
+    classbit:user.classDept?' - '+(user.classDept):'',
+    audience:(String(user.role||'')==='Student'?'Student':'Staff'),
+    action:action,
+    time:fmtTime((rec&&(rec.clockIn||rec.clockOut))||when.toISOString()),
+    date:fmtDate(when.toISOString()),
+    status:(rec&&rec.status)||'',
+    method:(rec&&rec.method)||'',
+    start:s.schoolStart
+  };
+  const message=fillTpl(s.tplAdmin||defaultSettings().tplAdmin,vars);
+  const result=await sendViaProvider('SMS',to,message);
+  logAlert({at:new Date().toISOString(),user:user.name+' (Admin notice)',event:'ADMIN '+action,channel:'email',recipient:to,status:result.status,message,note:result.note});
+}
+
 async function sendAlertFor(user,event,rec){
   const s=getSettings();
   const vars={name:user.name,time:rec?fmtTime(rec.clockIn||rec.clockOut):fmtTime(new Date().toISOString()),date:fmtDate(new Date().toISOString()),status:rec?rec.status:'',start:s.schoolStart};
@@ -329,6 +358,7 @@ window.manualSend=function(idx,channel){
   window.open(url,'_blank');
   entry.status='sent'; entry.note='Sent manually via '+(channel==='whatsapp'?'WhatsApp':'SMS'); saveJSON(LS_ALERTS,log); renderAdminAlerts();
 };
+window.sendAdminClockAlert=sendAdminClockAlert;
 window.runAbsentDigest=async function(){
   const s=getSettings();
   if(!s.sheetsWebhook){ toast('Add your Apps Script Web App URL in Cloud Sync first.',true); return; }
@@ -354,6 +384,7 @@ function hookClock(){
     if(user){
       const isIn=!!rec.clockIn && !rec.clockOut;
       pushToSheets('attendance',[rec.date,user.name,user.id,user.role,rec.clockIn||'',rec.clockOut||'',durationStr(rec.clockIn,rec.clockOut),rec.status,rec.method]);
+      sendAdminClockAlert(user,isIn?'CLOCK IN':'CLOCK OUT',rec);
       sendAlertFor(user,isIn?'CLOCK_IN':'CLOCK_OUT',rec);
       if(isIn && (rec.status==='Late'||rec.status==='Very Late')) sendAlertFor(user,'LATE',rec);
     }
@@ -471,8 +502,8 @@ function renderSettingsForm(){
   set('setTwilioSid',s.twilioSid); set('setTwilioToken',s.twilioToken); set('setTwilioFrom',s.twilioFrom);
   set('setTermiiKey',s.termiiKey); set('setTermiiFrom',s.termiiFrom); set('setWaToken',s.waToken); set('setWaPhoneId',s.waPhoneId); set('setWebhookUrl',s.webhookUrl);
   set('setAdminPhone',s.adminPhone);
-  chk('setAlertOnIn',s.alertOnIn); chk('setAlertOnOut',s.alertOnOut); chk('setAlertOnLate',s.alertOnLate); chk('setAlertOnAbsent',s.alertOnAbsent); chk('setAlertAdminSummary',s.alertAdminSummary); chk('setParentAlerts',s.parentAlerts); chk('setEmailStudents',s.emailStudents);
-  set('setTplIn',s.tplIn); set('setTplOut',s.tplOut); set('setTplLate',s.tplLate); set('setTplAbsent',s.tplAbsent);
+  chk('setAlertOnIn',s.alertOnIn); chk('setAlertOnOut',s.alertOnOut); chk('setAlertOnLate',s.alertOnLate); chk('setAlertOnAbsent',s.alertOnAbsent); chk('setAlertAdminSummary',s.alertAdminSummary); chk('setAlertAdminEvery',s.alertAdminEvery); chk('setParentAlerts',s.parentAlerts); chk('setEmailStudents',s.emailStudents);
+  set('setTplIn',s.tplIn); set('setTplOut',s.tplOut); set('setTplLate',s.tplLate); set('setTplAbsent',s.tplAbsent); set('setTplAdmin',s.tplAdmin);
   set('adminEmailDisplay',getAdmin().email);
 }
 window.saveSettingsUI=function(){
@@ -489,8 +520,9 @@ window.saveSettingsUI=function(){
   s.adminPhone=val('setAdminPhone',s.adminPhone);
   s.alertOnIn=on('setAlertOnIn',s.alertOnIn); s.alertOnOut=on('setAlertOnOut',s.alertOnOut);
   s.alertOnLate=on('setAlertOnLate',s.alertOnLate); s.alertOnAbsent=on('setAlertOnAbsent',s.alertOnAbsent);
-  s.alertAdminSummary=on('setAlertAdminSummary',s.alertAdminSummary); s.parentAlerts=on('setParentAlerts',s.parentAlerts); s.emailStudents=on('setEmailStudents',s.emailStudents);
+  s.alertAdminSummary=on('setAlertAdminSummary',s.alertAdminSummary); s.alertAdminEvery=on('setAlertAdminEvery',s.alertAdminEvery); s.parentAlerts=on('setParentAlerts',s.parentAlerts); s.emailStudents=on('setEmailStudents',s.emailStudents);
   s.tplIn=val('setTplIn',s.tplIn); s.tplOut=val('setTplOut',s.tplOut); s.tplLate=val('setTplLate',s.tplLate); s.tplAbsent=val('setTplAbsent',s.tplAbsent);
+  s.tplAdmin=val('setTplAdmin',s.tplAdmin)||defaultSettings().tplAdmin;
   if(!s.tplIn) s.tplIn=defaultSettings().tplIn;
   if(!s.tplOut) s.tplOut=defaultSettings().tplOut;
   if(!s.tplLate) s.tplLate=defaultSettings().tplLate;
@@ -578,6 +610,7 @@ function buildPanel(){
          +'<div class="switch-row"><input type="checkbox" id="setAlertOnLate"> Alert on Late arrival</div>'
          +'<div class="switch-row"><input type="checkbox" id="setAlertOnAbsent"> Alert on Absent</div>'
          +'<div class="switch-row"><input type="checkbox" id="setAlertAdminSummary"> Admin summary copy</div>'
+         +'<div class="switch-row"><input type="checkbox" id="setAlertAdminEvery"> <b>📣 Admin notice on EVERY clock in &amp; clock out</b></div>'
          +'<div class="switch-row"><input type="checkbox" id="setParentAlerts"> Also alert Parent/Guardian</div>'
          +'<div class="switch-row"><input type="checkbox" id="setEmailStudents"> 📧 Email the student/staff too (no SMS key needed)</div>'
          +'<div class="field" style="margin-top:8px"><label>Admin phone (summary copy)</label><input id="setAdminPhone" placeholder="0803 000 0000"></div>'
@@ -590,7 +623,8 @@ function buildPanel(){
          +'<div class="field" style="margin-top:8px"><label>Clock Out</label><textarea id="setTplOut" rows="2"></textarea></div>'
          +'<div class="field" style="margin-top:8px"><label>Late</label><textarea id="setTplLate" rows="2"></textarea></div>'
          +'<div class="field" style="margin-top:8px"><label>Absent</label><textarea id="setTplAbsent" rows="2"></textarea></div>'
-         +'<p class="small">Variables: {name} {time} {date} {status} {start}</p>'
+         +'<div class="field" style="margin-top:8px"><label>Admin clocking notice (sent to the admin email)</label><textarea id="setTplAdmin" rows="3"></textarea></div>'
+         +'<p class="small">Variables: {name} {id} {role} {classbit} {audience} {action} {time} {date} {status} {method} {start}</p>'
          +'<div class="divider"></div><h4>🧪 Test message</h4>'
          +'<div class="field"><label>Phone or email</label><input id="testPhone" placeholder="0803 000 0000 or name@mail.com"></div>'
          +'<div class="field" style="margin-top:8px"><label>Message</label><input id="testMsg" placeholder="Test alert…"></div>'

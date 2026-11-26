@@ -281,6 +281,16 @@ footer b{color:var(--green-900)}
       </div>
       <div class="card-body">
 
+        <div class="aud-bar">
+          <span class="aud-label">Attendance for</span>
+          <div class="aud-switch" id="audSwitch">
+            <button data-aud="All" class="active">Everyone</button>
+            <button data-aud="Student">Students</button>
+            <button data-aud="Staff">Staff</button>
+          </div>
+          <span class="aud-count" id="audCount"></span>
+        </div>
+
         <div class="methods">
           <button class="method-btn active" data-method="face"><span class="ico">😊</span><span class="t">Face Scan</span><span class="s">Camera + AI</span></button>
           <button class="method-btn" data-method="qr"><span class="ico">▣</span><span class="t">QR Code</span><span class="s">Scan ID card</span></button>
@@ -338,7 +348,7 @@ footer b{color:var(--green-900)}
         <!-- THUMB PANEL -->
         <div class="panel" id="panel-thumb">
           <div class="thumb-wrap">
-            <p class="small" style="max-width:460px;margin:0 auto">Press and <b>hold</b> the fingerprint for 2 seconds. If your device supports WebAuthn, a real device fingerprint prompt will appear; otherwise the secure hold-to-scan fallback is used.</p>
+            <p class="small" style="max-width:470px;margin:0 auto">Select your name, then press and <b>hold</b> the sensor for 2 seconds. Your device then asks for the <b>real</b> fingerprint (phone sensor or USB fingerprint reader). <b>No verified fingerprint, no clock-in</b> — if this device has no sensor, use Face, QR or ID + PIN.</p>
             <div class="finger" id="fingerBtn">
               <div class="fill" id="fingerFill"></div>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 11a3 3 0 0 1 3 3c0 2.5-.5 4.5-1.2 6M9 14c0 3-.4 5-1 6.5M12 8a6 6 0 0 1 6 6c0 1.5-.1 3-.4 4.5M6 14c0-3.3 2.7-6 6-6M4.5 10.5A8 8 0 0 1 12 4a8 8 0 0 1 7.5 5.5M12 11v4"/></svg>
@@ -485,7 +495,7 @@ footer b{color:var(--green-900)}
     <div class="card-body">
       <div class="filters">
         <input id="filterSearch" placeholder="🔍 Search name or ID…">
-        <select id="filterRole"><option value="">All Roles</option><option>Student</option><option>Staff</option><option>Teacher</option></select>
+        <select id="filterRole"><option value="">All Roles</option><option value="__student">🎓 All Students</option><option value="__staff">👔 All Staff</option><option>Student</option><option>Staff</option><option>Teacher</option></select>
         <input type="date" id="filterDate">
         <select id="filterStatus"><option value="">All Status</option><option value="Present">Present</option><option value="Late">Late</option><option value="Very Late">Very Late</option></select>
       </div>
@@ -600,7 +610,7 @@ function avatarHTML(user,size){
   return `<div class="avatar">${esc(initials(user.name))}</div>`;
 }
 function todayRecord(userId){ const t=todayStr(); return loadAtt().find(r=>r.userId===userId && r.date===t && !r.clockOut) || loadAtt().filter(r=>r.userId===userId && r.date===t).slice(-1)[0] || null; }
-function renderAll(){ renderStats(); renderToday(); renderLog(); renderPeople(); refreshSelects(); }
+function renderAll(){ renderStats(); renderToday(); renderLog(); renderPeople(); refreshSelects(); if(typeof renderAudienceCount==='function') renderAudienceCount(); }
 function renderStats(){
   const users=loadUsers(), att=loadAtt(), t=todayStr();
   const today=att.filter(r=>r.date===t);
@@ -631,7 +641,9 @@ function renderLog(){
   rows=rows.filter(r=>{
     const u=users.find(x=>x.id===r.userId);
     if(q && !((u?.name||'').toLowerCase().includes(q)||r.userId.toLowerCase().includes(q))) return false;
-    if(role && (u?.role||'')!==role) return false;
+    if(role==='__student' && groupOf(u&&u.role)!=='Student') return false;
+    if(role==='__staff' && groupOf(u&&u.role)!=='Staff') return false;
+    if(role && role!=='__student' && role!=='__staff' && (u?.role||'')!==role) return false;
     if(date && r.date!==date) return false;
     if(st && r.status!==st) return false;
     return true;
@@ -660,11 +672,40 @@ function renderPeople(){
 }
 window.deleteUser=function(id){ if(!confirm('Delete this person and their attendance?'))return; saveUsers(loadUsers().filter(u=>u.id!==id)); saveAtt(loadAtt().filter(r=>r.userId!==id)); renderAll(); toast('Person deleted.'); };
 window.manualToggle=function(id){ doClock(id,'Manual'); };
-function refreshSelects(){
+/* ---------- STUDENT / STAFF AUDIENCE ---------- */
+const LS_AUD='mia_audience_v1';
+function groupOf(role){ return String(role||'')==='Student' ? 'Student' : 'Staff'; }
+function currentAudience(){ try{ return localStorage.getItem(LS_AUD)||'All'; }catch(e){ return 'All'; } }
+function inAudience(u){ const a=currentAudience(); return a==='All' || groupOf(u&&u.role)===a; }
+function audienceUsers(){ return loadUsers().filter(inAudience); }
+window.setAudience=function(a){
+  try{ localStorage.setItem(LS_AUD,a); }catch(e){}
+  document.querySelectorAll('#audSwitch button').forEach(b=>b.classList.toggle('active',b.dataset.aud===a));
+  const tb=$('terminalCard'); if(tb) tb.dataset.audience=a;
+  refreshSelects(); renderAudienceCount();
+};
+function renderAudienceCount(){
+  const el=$('audCount'); if(!el) return;
   const users=loadUsers();
-  const opts=users.length? users.map(u=>`<option value="${u.id}">${esc(u.name)} (${esc(u.id)}) — ${esc(u.role)}</option>`).join('') : '<option value="">— No users yet —</option>';
-  $('thumbUserSelect').innerHTML=opts; $('idpinUserSelect').innerHTML=opts;
+  const stu=users.filter(u=>groupOf(u.role)==='Student').length, staff=users.length-stu;
+  const a=currentAudience();
+  el.textContent = a==='All' ? (stu+' students • '+staff+' staff') : (a==='Student' ? stu+' students' : staff+' staff');
 }
+function refreshSelects(){
+  const users=audienceUsers();
+  const a=currentAudience();
+  const empty=a==='All' ? '— No users yet —' : (a==='Student' ? '— No students registered yet —' : '— No staff registered yet —');
+  const keep=id=>{ const el=$(id); return el? el.value:''; };
+  const prevThumb=keep('thumbUserSelect'), prevPin=keep('idpinUserSelect');
+  const opts=users.length? users.map(u=>`<option value="${u.id}">${esc(u.name)} (${esc(u.id)}) — ${esc(u.role)}</option>`).join('') : '<option value="">'+empty+'</option>';
+  $('thumbUserSelect').innerHTML=opts; $('idpinUserSelect').innerHTML=opts;
+  if(users.some(u=>u.id===prevThumb)) $('thumbUserSelect').value=prevThumb;
+  if(users.some(u=>u.id===prevPin)) $('idpinUserSelect').value=prevPin;
+  renderAudienceCount();
+}
+document.querySelectorAll('#audSwitch button').forEach(b=>{
+  b.addEventListener('click',()=>setAudience(b.dataset.aud));
+});
 
 /* ---------- CLOCK LOGIC ---------- */
 function doClock(userId, method){
@@ -790,9 +831,9 @@ $('btnFaceCapture').addEventListener('click',async()=>{
   const video=$('faceVideo'); if(!video.videoWidth){ toast('Camera not ready',true); return; }
   const photo=capturePhoto(video);
   $('facePreviewBox').innerHTML=`<div class="face-preview"><img src="${photo}"><div><b>Captured face</b><br><span class="small">Comparing with enrolled photos…</span><div id="faceMatchLine" style="margin-top:6px;font-weight:800">Analyzing…</div></div></div>`;
-  const users=loadUsers().filter(u=>u.faceThumb);
+  const users=audienceUsers().filter(u=>u.faceThumb);
   if(!users.length){
-    $('faceMatchLine').innerHTML='⚠️ No enrolled face photos yet. Register with face first, or use QR / ID+PIN.';
+    $('faceMatchLine').innerHTML='⚠️ No enrolled face photos in this group yet. Register with face first, or switch to Everyone.';
     showResultOne('faceResult','info','No face enrollments','Please register a face photo first (Register tab), or use QR / ID + PIN for demo users.');
     return;
   }
@@ -838,22 +879,117 @@ function holdToScan(el, fillEl, barEl, statusEl, onDone, holdMs=2000){
   el.addEventListener('pointerdown',begin); el.addEventListener('pointerup',cancel); el.addEventListener('pointerleave',cancel); el.addEventListener('pointercancel',cancel);
   el.addEventListener('touchstart',begin,{passive:false}); el.addEventListener('touchend',cancel);
 }
-async function tryWebAuthn(){
-  try{
-    if(!navigator.credentials?.create) return false;
-    const id=new Uint8Array(16); crypto.getRandomValues(id);
-    await navigator.credentials.create({publicKey:{challenge:id,rp:{name:"MAKNAZUL 'IRFAN ACADEMY",id:location.hostname},user:{id,name:'user',displayName:'MAKNAZUL User'},pubKeyCredParams:[{type:'public-key',alg:-7}],timeout:15000}});
-    return true;
-  }catch(e){ return false; }
+/* ---------- REAL FINGERPRINT (WebAuthn) ----------
+   A web page cannot read a fingerprint by itself: it must ask the device
+   (phone sensor / USB FIDO2 reader). So: enrol once, then every clock-in
+   must pass a real verification or nothing is recorded.                  */
+const BIO_RP="MAKNAZUL 'IRFAN ACADEMY";
+function b64u(buf){
+  const b=new Uint8Array(buf); let str='';
+  for(let i=0;i<b.length;i++) str+=String.fromCharCode(b[i]);
+  return btoa(str).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
+function unb64u(txt){
+  const s=String(txt||'').replace(/-/g,'+').replace(/_/g,'/');
+  const bin=atob(s+'='.repeat((4-s.length%4)%4));
+  const out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+function bioSupported(){
+  try{ return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create && navigator.credentials.get); }catch(e){ return false; }
+}
+async function bioAvailable(){
+  if(!bioSupported()) return false;
+  try{
+    if(PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable){
+      if(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) return true;
+    }
+  }catch(e){}
+  try{
+    if(PublicKeyCredential.isExternalCTAP2SecurityKeySupported){
+      if(await PublicKeyCredential.isExternalCTAP2SecurityKeySupported()) return true;
+    }
+  }catch(e){}
+  return false;
+}
+async function bioEnrol(displayName){
+  if(!bioSupported()) return null;
+  try{
+    const ch=new Uint8Array(32); crypto.getRandomValues(ch);
+    const uid=new Uint8Array(32); crypto.getRandomValues(uid);
+    const nm=String(displayName||'MAKNAZUL User').slice(0,60)||'MAKNAZUL User';
+    const cred=await navigator.credentials.create({publicKey:{
+      challenge:ch,
+      rp:{name:BIO_RP,id:(location.hostname||'localhost')},
+      user:{id:uid,name:nm,displayName:nm},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{userVerification:'required',residentKey:'preferred',requireResidentKey:false},
+      timeout:60000,
+      attestation:'none'
+    }});
+    return cred&&cred.rawId? b64u(cred.rawId) : null;
+  }catch(e){ return null; }
+}
+async function bioVerify(credIdB64){
+  if(!bioSupported()) return {ok:false,reason:'no-api'};
+  try{
+    const ch=new Uint8Array(32); crypto.getRandomValues(ch);
+    const allow=credIdB64? [{type:'public-key',id:unb64u(credIdB64),transports:['internal','hybrid','usb','nfc','ble']}] : [];
+    const cred=await navigator.credentials.get({publicKey:{
+      challenge:ch, rpId:(location.hostname||'localhost'),
+      allowCredentials:allow, userVerification:'required', timeout:60000
+    }});
+    if(!cred) return {ok:false,reason:'cancelled'};
+    const got=b64u(cred.rawId);
+    if(credIdB64 && got!==credIdB64) return {ok:false,reason:'mismatch'};
+    return {ok:true,id:got};
+  }catch(e){
+    const n=(e&&e.name)||'';
+    if(n==='NotAllowedError') return {ok:false,reason:'cancelled'};
+    if(n==='InvalidStateError') return {ok:false,reason:'unknown-credential'};
+    return {ok:false,reason:'failed'};
+  }
+}
+window.MIABio={supported:bioSupported,available:bioAvailable,enrol:bioEnrol,verify:bioVerify};
 holdToScan($('fingerBtn'),$('fingerFill'),$('thumbBar'),$('thumbStatus'),async()=>{
+  const status=$('thumbStatus');
   const userId=$('thumbUserSelect').value;
-  if(!userId){ showResultOne('thumbResult','err','Select your name first','Choose your name above, then hold the fingerprint.'); return; }
-  const users=loadUsers(); const u=users.find(x=>x.id===userId);
-  if(!u?.thumbId){ showResultOne('thumbResult','err','No thumbprint enrolled',`${u?.name||userId} has no thumbprint yet. Register with thumbprint first, or use PIN.`); return; }
-  $('thumbStatus').textContent='Verifying thumbprint…';
-  const ok=await tryWebAuthn();
-  $('thumbStatus').textContent= ok? 'Device fingerprint verified ✓' : 'Thumbprint template matched ✓ (hold-scan)';
+  if(!userId){ showResultOne('thumbResult','err','Select your name first','Choose your name above, then hold the sensor.'); return; }
+  const u=loadUsers().find(x=>x.id===userId);
+  if(!u){ showResultOne('thumbResult','err','Select your name first','Choose your name above, then hold the sensor.'); return; }
+  if(!u.thumbId){
+    beep(false); status.textContent='No fingerprint enrolled';
+    showResultOne('thumbResult','err','No fingerprint enrolled',u.name+' has not enrolled a fingerprint on a device with a sensor. Enrol from the Register tab, or ask the admin to bind one from the person Edit screen. Meanwhile use Face, QR or ID + PIN.');
+    return;
+  }
+  if(!bioSupported()){
+    beep(false); status.textContent='This browser cannot verify fingerprints';
+    showResultOne('thumbResult','err','Fingerprint not verified','This browser/device cannot read a fingerprint, so nothing was recorded. Use Face, QR or ID + PIN.');
+    return;
+  }
+  status.textContent='Waiting for your fingerprint…';
+  if(!(await bioAvailable())){
+    beep(false); status.textContent='No fingerprint sensor on this device';
+    showResultOne('thumbResult','err','Fingerprint not verified','No fingerprint sensor or FIDO2 reader was found on this device, so nothing was recorded. Use Face, QR or ID + PIN - or open the site on a phone with a fingerprint sensor.');
+    return;
+  }
+  if(!u.thumbCred){
+    beep(false); status.textContent='Fingerprint not bound to a reader';
+    showResultOne('thumbResult','err','Fingerprint not verified',u.name+' enrolled a fingerprint before real verification was switched on. Enrol again from the Register tab (or ask the admin to bind it from the Edit screen), or use Face, QR or ID + PIN.');
+    return;
+  }
+  const res=await bioVerify(u.thumbCred);
+  if(!res.ok){
+    beep(false);
+    status.textContent=(res.reason==='cancelled')?'Not verified - no clock-in':'Fingerprint did not match';
+    let why='Verification failed or was cancelled.';
+    if(res.reason==='mismatch') why='That fingerprint belongs to a different enrolment.';
+    if(res.reason==='unknown-credential') why='This fingerprint is not the one enrolled here.';
+    showResultOne('thumbResult','err','Fingerprint not verified',why+' Nothing was recorded.');
+    return;
+  }
+  status.textContent='Fingerprint verified ✓';
   doClock(userId,'Thumbprint');
 });
 
@@ -886,7 +1022,7 @@ $('tab-log').addEventListener('click',()=>switchTab('log'));
 $('tab-people').addEventListener('click',()=>switchTab('people'));
 
 /* ---------- REGISTRATION WIZARD ---------- */
-let regFacePhoto=null, regThumbId=null;
+let regFacePhoto=null, regThumbId=null, regThumbCred=null;
 function wizStep(n){
   [1,2,3].forEach(i=>{ $('wiz'+i).classList.toggle('active',i===n); $('stepDot'+i).classList.toggle('active',i===n); $('stepDot'+i).classList.toggle('done',i<n); });
   if(n===1) $('regIdPreview').value=nextUserId();
@@ -912,10 +1048,16 @@ $('btnRegCapture').addEventListener('click',()=>{
 });
 $('btnWiz2Next').addEventListener('click',()=>{ stopRegCam(); wizStep(3); });
 holdToScan($('regFingerBtn'),$('regFingerFill'),$('regThumbBar'),$('regThumbStatus'),async()=>{
-  $('regThumbStatus').textContent='Enrolling thumbprint…';
-  const ok=await tryWebAuthn();
-  regThumbId='THUMB-'+hashStr($('regName').value+Date.now()).slice(0,8)+(ok?'-WA':'-HS');
-  $('regThumbStatus').textContent='Thumbprint enrolled ✓ ('+regThumbId+')';
+  const st=$('regThumbStatus');
+  regThumbId=null; regThumbCred=null;
+  if(!bioSupported()){ st.textContent='✗ This browser cannot read fingerprints'; toast('This browser cannot read a fingerprint. Use Face + PIN, or enrol on a phone with a fingerprint sensor.',true); return; }
+  if(!(await bioAvailable())){ st.textContent='✗ No fingerprint sensor detected'; toast('No fingerprint sensor or FIDO2 reader on this device - enrolment needs a real reader.',true); return; }
+  st.textContent='Place your finger on the sensor…';
+  const credId=await bioEnrol($('regName').value.trim()||'MAKNAZUL User');
+  if(!credId){ st.textContent='✗ Fingerprint not captured - hold again'; toast('Fingerprint enrolment was cancelled or failed. Try again.',true); return; }
+  regThumbCred=credId;
+  regThumbId='THUMB-'+hashStr(credId).slice(0,8);
+  st.textContent='Fingerprint verified & enrolled ✓ ('+regThumbId+')';
   beep(true);
 });
 $('btnRegisterFinish').addEventListener('click',()=>{
@@ -923,15 +1065,15 @@ $('btnRegisterFinish').addEventListener('click',()=>{
   const pin=$('regPin').value.trim(), pin2=$('regPin2').value.trim();
   if(!name||!cls){ toast('Name and Class/Department are required',true); return; }
   if(!regFacePhoto){ toast('Please capture a face photo first',true); wizStep(2); return; }
-  if(!regThumbId){ toast('Please enroll thumbprint (hold the fingerprint)',true); return; }
+  if(!regThumbId || !regThumbCred){ toast('Please enrol a real fingerprint first (hold the sensor until it verifies)',true); wizStep(3); return; }
   if(!/^\d{4}$/.test(pin)||pin!==pin2){ toast('PIN must be 4 digits and match',true); return; }
-  const user={id:nextUserId(),name,role,classDept:cls,gender:$('regGender').value,phone:$('regPhone').value.trim(),parentPhone:($('regParentPhone')?$('regParentPhone').value.trim():''),parentEmail:($('regParentEmail')?$('regParentEmail').value.trim():''),email:$('regEmail').value.trim(),faceThumb:regFacePhoto,thumbId:regThumbId,pin,createdAt:nowISO()};
+  const user={id:nextUserId(),name,role,classDept:cls,gender:$('regGender').value,phone:$('regPhone').value.trim(),parentPhone:($('regParentPhone')?$('regParentPhone').value.trim():''),parentEmail:($('regParentEmail')?$('regParentEmail').value.trim():''),email:$('regEmail').value.trim(),faceThumb:regFacePhoto,thumbId:regThumbId,thumbCred:regThumbCred,pin,createdAt:nowISO()};
   const users=loadUsers(); users.push(user); saveUsers(users); renderAll();
   const payload=qrPayloadFor(user);
   $('regSuccess').innerHTML=`<div class="result show ok" style="margin-top:18px"><div class="result-head">${avatarHTML(user)}<div><h4>✅ Registration complete — Welcome, ${esc(name)}!</h4><div class="meta">User ID: <b>${esc(user.id)}</b> • Role: ${esc(role)} • ${esc(cls)}<br>Face ✓ • Thumbprint ✓ (${esc(regThumbId)}) • QR Code generated below. You can now clock in/out by face, QR, thumbprint, or PIN.</div></div></div><div class="btn-row"><button class="btn btn-gold" onclick="openQrModal('${user.id}')">▣ View My QR ID Card</button><button class="btn btn-green" onclick="manualToggle('${user.id}')">🕐 Clock In Now</button></div></div>`;
   $('regSuccess').scrollIntoView({behavior:'smooth'});
   // reset wizard
-  regFacePhoto=null; regThumbId=null; $('regFacePreview').innerHTML=''; $('btnWiz2Next').disabled=true;
+  regFacePhoto=null; regThumbId=null; regThumbCred=null; $('regFacePreview').innerHTML=''; $('btnWiz2Next').disabled=true;
   ['regName','regClass','regPhone','regEmail','regPin','regPin2','regParentPhone','regParentEmail'].forEach(id=>{ if($(id)) $(id).value=''; });
   wizStep(1); toast('Registered: '+name+' ('+user.id+')');
 });

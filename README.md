@@ -126,6 +126,7 @@ Demo data seeds on first load — 6 users, PIN `1234`, no face photos (use QR or
 | `index-v1-backup.html` | Pre-admin version (no login/sync/alerts) |
 
 ## 🧪 Verified
+* 33 attendance-integrity checks (jsdom): admin re-binding of a fingerprint; a clock-in is refused with no sensor, on a cancelled prompt, on a mismatched fingerprint and on an unbound legacy enrolment; a verified fingerprint records `Thumbprint`; enrolment needs a real sensor; Student/Staff switch filters the pickers, the face matcher and the log; admin email fires on both clock-in and clock-out even with every other alert off, and can be switched off.
 * 47 edit/PDF checks (jsdom + jsPDF): every person field saved, bad PIN blocked, photo add/remove, record date/time/status/method edits, out-before-in blocked, identity saved and re-branded live, profile / records / all-profiles PDFs generated, role filter honoured, no console errors. Real PDFs rendered and eyeballed (layout, column widths, pagination).
 * 19 frontend checks (jsdom): login accept/reject, admin visibility, panel render, settings persistence, clock hook → backend POST, alerts marked `sent`, parent recipient, sheet push, absent digest, logout.
 * 16 backend checks: phone normalisation, Termii payload (E.164), Alerts sheet logging, attendance append, bulk rewrite, absentee detection + summary email, health endpoint, malformed-input handling.
@@ -146,3 +147,34 @@ Log in as admin, then every card and every attendance row gets extra buttons.
 | Admin → Settings | 📄 **PDF exports** | Attendance records PDF with From / To dates, role, status and name filters, plus a 📚 all-profiles PDF (one page per person). |
 
 Everything is stored in the same local storage keys and re-synced to Google Sheets (`type:'attendance'` / `type:'user'`). PDFs are generated in the browser with the bundled `jspdf.umd.min.js` — no internet needed.
+
+## 👆 Fingerprint clock-in (real verification)
+
+A web page cannot read a fingerprint by itself — it has to ask the device. So the thumb method now works like this:
+
+1. Select your name, then **hold the sensor for 2 seconds**.
+2. The device asks for the **real** fingerprint (phone/tablet sensor, Windows Hello, or a USB FIDO2 fingerprint reader).
+3. Only a **verified** fingerprint records the clocking. Cancelled prompt, wrong finger, no sensor, or a fingerprint enrolled on another person → **nothing is saved** and the screen says why.
+
+Enrolment happens in the Register wizard (Face → Fingerprint → PIN). The credential is bound to that person, so one person's finger can never clock in someone else.
+
+**Devices without a sensor:** the thumb button refuses and points to Face, QR or ID + PIN — that is the honest behaviour, because there is no fingerprint to check. For a reception kiosk, a cheap USB FIDO2 fingerprint reader (e.g. a FIDO2 key with a fingerprint sensor) plugs in and works in Chrome/Edge on the same page.
+
+**Existing people** enrolled before this change have no bound credential, so their thumb stops working until they re-enrol. Admin can fix it per person: **People → ✏️ Edit → 👆 Bind fingerprint on this device**.
+
+## 🎓 Student / Staff attendance
+
+The clock terminal has an **Attendance for: Everyone / Students / Staff** switch. It filters the name pickers and the face-matcher, shows the head-count of each group, and remembers the choice on that device. The Attendance Log gains **🎓 All Students** and **👔 All Staff** in its role filter, and the PDF exports filter by role too.
+
+## 📣 Admin told about every clocking
+
+With **Admin → Alerts → "Admin notice on EVERY clock in & clock out"** (on by default) the Apps Script backend emails the admin (default `maknazulirfanacademy@gmail.com`) the moment anyone clocks in or out:
+
+```
+ADMIN NOTICE - CLOCK IN: Aisha Bello (Student - JSS 2A) - Student - at 07:31 AM on Mon, 24 Nov 2026.
+Status: Present. Method: QR. User ID: MIA-2026-001.
+```
+
+Each notice is also listed in **Admin → Alerts → Alert Log** with a status of `sent` / `queued` / `failed`. The wording is editable in **Settings → Message templates → Admin clocking notice**; variables: `{name} {id} {role} {classbit} {audience} {action} {time} {date} {status} {method} {start}`.
+
+> **Gmail sending limit:** a free Gmail account can send about **100 emails a day** through Apps Script. Two mails per person per day (in + out) plus student/guardian copies can reach that. If you expect more than ~25 clockings a day with everyone's copies on, either turn off the student/guardian email copies (the Alerts sheet still records everything) or use a Google Workspace account (1,500/day). Nothing is lost when the limit is hit — the attendance itself and the Alerts sheet row are still saved locally and in Sheets.
