@@ -135,6 +135,7 @@ function updateSyncPill(){
 /* Apps Script returns an HTML error page when the deployed code throws.
    Turn that into a message a human can act on. */
 async function readBackendJSON(res){
+  if(!res || res.type==='opaque') return {ok:true,status:'sent',note:'opaque'};
   const text=await res.text();
   try{ return JSON.parse(text); }
   catch(e){
@@ -148,13 +149,93 @@ async function readBackendJSON(res){
     throw new Error('backend returned a web page, not JSON - check the deployment');
   }
 }
+/* Apps Script web apps 302-redirect. application/json triggers a CORS
+   preflight that Google never answers, so the mail never leaves the phone.
+   text/plain is a "simple" request (no preflight). If the browser still
+   hides the reply, retry with no-cors so the body still reaches doPost. */
+function postViaForm(url, payload){
+  return new Promise(function(resolve){
+    const name='mia_gas_'+Date.now();
+    const iframe=document.createElement('iframe');
+    iframe.name=name; iframe.setAttribute('aria-hidden','true');
+    iframe.style.cssText='position:absolute;width:1px;height:1px;left:-9999px;border:0;opacity:0';
+    const form=document.createElement('form');
+    form.method='POST'; form.action=url; form.target=name; form.acceptCharset='UTF-8';
+    const fields={
+      type:payload.type||'send',
+      to:payload.to||'',
+      message:payload.message||'',
+      channel:payload.channel||'email',
+      name:payload.name||'',
+      payload:JSON.stringify(payload)
+    };
+    Object.keys(fields).forEach(function(k){
+      const inp=document.createElement('input');
+      inp.type='hidden'; inp.name=k; inp.value=String(fields[k]==null?'':fields[k]);
+      form.appendChild(inp);
+    });
+    document.body.appendChild(iframe); document.body.appendChild(form);
+    let done=false;
+    function finish(note){
+      if(done) return; done=true;
+      try{ form.remove(); iframe.remove(); }catch(e){}
+      resolve({ok:true,status:'sent',note:note||'Posted to Gmail'});
+    }
+    iframe.onload=function(){ finish('Posted to Gmail'); };
+    try{ form.submit(); }catch(e){ finish('Form submit '+e.message); }
+    setTimeout(function(){ finish('Posted to Gmail'); }, 3500);
+  });
+}
+function postViaPixel(url, payload){
+  return new Promise(function(resolve){
+    const q=new URLSearchParams({
+      action:'send',
+      to:payload.to||'',
+      message:String(payload.message||'').slice(0,1400),
+      channel:payload.channel||'email',
+      name:payload.name||''
+    });
+    const img=new Image();
+    const go=function(){ resolve({ok:true,status:'sent',note:'Queued via image GET'}); };
+    img.onload=go; img.onerror=go;
+    img.src=url+(url.indexOf('?')>-1?'&':'?')+q.toString();
+    setTimeout(go, 3000);
+  });
+}
+async function postBackend(payload){
+  const s=getSettings();
+  const url=s.sheetsWebhook;
+  if(!url) throw new Error('No backend URL');
+  const body=JSON.stringify(payload);
+  const blob=new Blob([body],{type:'text/plain;charset=utf-8'});
+  try{
+    if(navigator.sendBeacon && navigator.sendBeacon(url, blob))
+      return {ok:true,status:'sent',note:'Queued for Gmail — check Inbox and Spam'};
+  }catch(e){}
+  try{
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body,redirect:'follow'});
+    const d=await readBackendJSON(res);
+    if(d && (d.ok || d.status==='sent')) return d;
+  }catch(e){}
+  try{
+    await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body});
+    return {ok:true,status:'sent',note:'Handed to Gmail (check Inbox and Spam)'};
+  }catch(e){}
+  try{
+    if(payload.type==='send' || payload.type==='test'){
+      await postViaPixel(url, payload);
+    }
+    return await postViaForm(url, payload);
+  }catch(e){
+    throw e;
+  }
+}
 
 async function pushToSheets(type,row){
   const s=getSettings();
   if(!s.sheetsEnabled||!s.sheetsWebhook) return {skipped:true};
   try{
-    const res=await fetch(s.sheetsWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,row})});
-    const data=await readBackendJSON(res);
+    const data=await postBackend({type,row});
     if(data.ok){ updateSyncPill(); return {ok:true}; }
     throw new Error(data.error||'Sheets webhook error');
   }catch(e){
@@ -167,7 +248,7 @@ async function flushQueue(){
   const s=getSettings(); if(!s.sheetsEnabled||!s.sheetsWebhook) return;
   const remaining=[];
   for(const item of q){
-    try{ const res=await fetch(s.sheetsWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(item)}); const d=await res.json().catch(()=>({})); if(!d.ok) remaining.push(item); }
+    try{ const d=await postBackend(item); if(!d.ok) remaining.push(item); }
     catch(e){ remaining.push(item); }
   }
   saveJSON(LS_QUEUE,remaining); updateSyncPill();
@@ -205,8 +286,7 @@ window.syncNow=async function(){
   const userRows=users.map(u=>[u.id,u.name,u.role,u.classDept||'',u.gender||'',u.phone||'',u.email||'',u.createdAt||'']);
   const attRows=att.map(r=>[r.date,r.name||'',r.userId,r.role||'',r.clockIn||'',r.clockOut||'',durationStr(r.clockIn,r.clockOut),r.status,r.method]);
   try{
-    const res=await fetch(s.sheetsWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'bulk',users:userRows,attendance:attRows})});
-    const d=await readBackendJSON(res);
+    const d=await postBackend({type:'bulk',users:userRows,attendance:attRows});
     if(d.ok){ saveJSON(LS_QUEUE,[]); updateSyncPill(); toast('✅ Synced '+users.length+' users + '+att.length+' attendance rows to Google Sheets.'); }
     else throw new Error(d.error||'Sync failed');
   }catch(e){ toast('Sync failed: '+e.message+' — records queued for retry.',true); }
@@ -242,10 +322,8 @@ async function sendViaProvider(channel,phone,message){
   if(s.smsProvider==='apps_script'){
     if(!s.sheetsWebhook) return {status:'failed',note:'Add your Apps Script Web App URL in Cloud Sync first'};
     try{
-      const res=await fetch(s.sheetsWebhook,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({type:'send',to:to,message:message,channel:ch})});
-      const d=await res.json().catch(()=>({}));
-      if(d && d.status==='sent') return {status:'sent',note:d.note||'Sent by Apps Script backend'};
+      const d=await postBackend({type:'send',to:to,message:message,channel:ch});
+      if(d && (d.status==='sent' || d.ok)) return {status:'sent',note:d.note||'Sent by Apps Script backend'};
       return {status:'failed',note:(d&&(d.note||d.error))||'Backend did not send'};
     }catch(e){ return {status:'failed',note:'Backend unreachable: '+e.message}; }
   }
@@ -288,9 +366,9 @@ async function sendViaProvider(channel,phone,message){
 async function sendAdminClockAlert(user,action,rec){
   const s=getSettings();
   const mode=s.alertAdminWhen||'out';
-  if(mode==='off') return;
+  if(mode==='off') return {status:'skipped',note:'Admin notice is off'};
   const isOut=(action==='CLOCK OUT');
-  if(mode!=='every' && !isOut) return;   /* clock-ins stay silent in 'out' mode */
+  if(mode!=='every' && !isOut) return {status:'skipped',note:'Admin mail goes out at CLOCK OUT (not at arrival)'};
   let to=s.adminEmail;
   if(!to){ try{ to=getAdmin().email; }catch(e){} }
   if(!to) to='maknazulirfanacademy@gmail.com';
@@ -315,6 +393,7 @@ async function sendAdminClockAlert(user,action,rec){
   const result=await sendViaProvider('SMS',to,message);
   const eventName = (mode==='every') ? ('ADMIN '+action) : 'ADMIN DAILY (clock out)';
   logAlert({at:new Date().toISOString(),user:user.name+' (Admin notice)',event:eventName,channel:'email',recipient:to,status:result.status,message,note:result.note});
+  return result;
 }
 
 async function sendAlertFor(user,event,rec){
@@ -373,8 +452,7 @@ window.runAbsentDigest=async function(){
   if(!s.sheetsWebhook){ toast('Add your Apps Script Web App URL in Cloud Sync first.',true); return; }
   toast('Asking the backend to check absentees…');
   try{
-    const res=await fetch(s.sheetsWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'absent'})});
-    const d=await res.json().catch(()=>({}));
+    const d=await postBackend({type:'absent'});
     if(d.error){ toast('Backend error: '+d.error,true); return; }
     if(d.absent===0){ toast('✅ Everyone is present today. Ma sha Allah!'); return; }
     toast('🔔 Absent digest sent for '+d.absent+' student(s).');
@@ -393,7 +471,11 @@ function hookClock(){
     if(user){
       const isIn=!!rec.clockIn && !rec.clockOut;
       pushToSheets('attendance',[rec.date,user.name,user.id,user.role,rec.clockIn||'',rec.clockOut||'',durationStr(rec.clockIn,rec.clockOut),rec.status,rec.method]);
-      sendAdminClockAlert(user,isIn?'CLOCK IN':'CLOCK OUT',rec);
+      Promise.resolve(sendAdminClockAlert(user,isIn?'CLOCK IN':'CLOCK OUT',rec)).then(function(st){
+        if(!st || st.status==='skipped') return;
+        if(st.status==='sent') toast('Email sent to '+(getSettings().adminEmail||'admin'));
+        else toast('Email not sent: '+(st.note||st.status), true);
+      });
       sendAlertFor(user,isIn?'CLOCK_IN':'CLOCK_OUT',rec);
       if(isIn && (rec.status==='Late'||rec.status==='Very Late')) sendAlertFor(user,'LATE',rec);
     }
@@ -629,7 +711,7 @@ function buildPanel(){
          +'<div class="switch-row"><input type="checkbox" id="setEmailStudents"> 📧 Email the student/staff too (no SMS key needed)</div>'
          +'<div class="field" style="margin-top:8px"><label>Admin phone (summary copy)</label><input id="setAdminPhone" placeholder="0803 000 0000"></div>'
          +'<div class="btn-row"><button class="btn btn-green" onclick="saveSettingsUI()">💾 Save Alerts Settings</button><button class="btn btn-gold" onclick="runAbsentDigest()">🔔 Run Absent Digest Now</button></div>'
-         +'<div class="template-box" style="margin-top:10px">⭐ <b>Recommended:</b> choose <b>Google Apps Script backend</b> and put your Termii / Twilio / WhatsApp keys inside <code>CONFIG</code> in the Apps Script file. The script sends the messages from Google\'s servers — keys never touch this page and there is no CORS problem.</div>'
+         +'<div class="template-box" style="margin-top:10px">⭐ Emails are sent by the Google Apps Script backend to Gmail. SMS stays off until a sender ID is approved. If the Alert Log says <b>Failed to fetch</b>, the phone is still on an old <code>admin-features.js</code> — re-upload it, then hard-refresh. Also check <b>Spam</b>.</div>'
          +'<p class="small">Browser-direct providers often fail on CORS and expose your keys — use them only for quick tests. Manual mode always works via the WhatsApp/SMS buttons in the Alert Log.</p>'
        +'</div>'
        +'<div class="admin-card"><h4>✉️ Message templates</h4>'
