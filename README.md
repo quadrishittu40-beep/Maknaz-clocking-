@@ -119,7 +119,7 @@ Demo data seeds on first load — 6 users, PIN `1234`, no face photos (use QR or
 |---|---|
 | `index.html` | Main app (terminal, registration, log, people, ID cards, QR) |
 | `admin-features.js` | Admin login, Sheets sync, alerts engine, admin panel |
-| `admin-edit.js` | Edit every person + attendance record, school identity, profile/records PDF |
+| `admin-edit.js` | Edit every person + attendance record, school identity, profile/records/absentee PDFs |
 | `admin.css` | Admin panel / KPI / sync pill / alert log / edit modal styles |
 | `google-apps-script.gs` | **The backend** — sync + email/WhatsApp alerts + daily absent job |
 | `libs/` (`assets/`) | Local QR generate, QR scan, face-api, jsPDF, logo — flatten these into the root when hosting on GitHub Pages |
@@ -128,6 +128,7 @@ Demo data seeds on first load — 6 users, PIN `1234`, no face photos (use QR or
 ## 🧪 Verified
 * 42 attendance-integrity checks (jsdom): admin re-binding of a fingerprint; a clock-in is refused with no sensor, on a cancelled prompt, on a mismatched fingerprint and on an unbound legacy enrolment; a verified fingerprint records `Thumbprint`; enrolment needs a real sensor; Student/Staff switch filters the pickers, the face matcher and the log; admin gets exactly one mail per person per day (at clock out, showing arrival + duration), nothing at clock-in, with "every" and "off" modes both honoured.
 * 47 edit/PDF checks (jsdom + jsPDF): every person field saved, bad PIN blocked, photo add/remove, record date/time/status/method edits, out-before-in blocked, identity saved and re-branded live, profile / records / all-profiles PDFs generated, role filter honoured, no console errors. Real PDFs rendered and eyeballed (layout, column widths, pagination).
+* 18 absentee-report checks: empty days skipped, weekends optional, late joiners excluded until registered, students/staff kept apart, present people omitted, combined + split PDFs, 40-day pagination.
 * 19 frontend checks (jsdom): login accept/reject, admin visibility, panel render, settings persistence, clock hook → backend POST, alerts marked `sent`, parent recipient, sheet push, absent digest, logout.
 * 16 backend checks: phone normalisation, Termii payload (E.164), Alerts sheet logging, attendance append, bulk rewrite, absentee detection + summary email, health endpoint, malformed-input handling.
 
@@ -145,8 +146,21 @@ Log in as admin, then every card and every attendance row gets extra buttons.
 | Attendance Log, each row | ✏️ | Fix the date, clock-in time, clock-out time, status (Present / Late / Very Late) and method (QR / Face / Thumbprint / ID + PIN). Can also delete the row. |
 | Admin → Settings | 🏫 **School identity** | School name, motto, subtitle, address and phone — used in the header, the footer and on every PDF. |
 | Admin → Settings | 📄 **PDF exports** | Attendance records PDF with From / To dates, role, status and name filters, plus a 📚 all-profiles PDF (one page per person). |
+| Admin → Settings | 📅 **Daily absentees** | One combined file of everyone who never clocked in, day by day, with **students** and **staff** in separate sections (or two files). PDF or CSV. |
 
 Everything is stored in the same local storage keys and re-synced to Google Sheets (`type:'attendance'` / `type:'user'`). PDFs are generated in the browser with the bundled `jspdf.umd.min.js` — no internet needed.
+
+## 📅 Daily absentees (students and staff, one file)
+
+**Admin → Settings → Daily absentees**. Pick From / To dates.
+
+Each day is listed with two blocks: **STUDENTS ABSENT** (green table) and **STAFF ABSENT** (gold table). Anyone who never clocked in that day is named, with class/department and guardian phone.
+
+- Default output is **one PDF** covering both groups.
+- Switch **Output** to *Two files* if you want a student PDF and a staff PDF separately.
+- **CSV** dumps the same rows (Date, Group, Name, User ID, Class / Dept, Guardian phone).
+- Days with no clock-ins at all are skipped by default (so holidays do not fill the report). Saturdays and Sundays can be skipped too.
+- People are only counted after their registration date.
 
 ## 👆 Fingerprint clock-in (real verification)
 
