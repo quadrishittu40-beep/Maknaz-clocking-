@@ -78,6 +78,7 @@ input,select,textarea{font-family:inherit}
 /* CAMERA */
 .cam-box{position:relative;background:#0a1f16;border-radius:16px;overflow:hidden;border:2px solid var(--green-900)}
 .cam-box video{width:100%;height:340px;object-fit:cover;display:block;background:#111}
+#faceVideo,#regVideo{transform:scaleX(-1)}
 .oval{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:210px;height:270px;border:3px dashed rgba(232,199,102,.95);border-radius:50%;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
 .oval::after{content:"Align your face in the oval";position:absolute;left:50%;bottom:-34px;transform:translateX(-50%);white-space:nowrap;color:#fff;font-size:12.5px;background:rgba(0,0,0,.55);padding:5px 10px;border-radius:999px}
 .scanline{position:absolute;left:12%;right:12%;height:3px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent);top:20%;animation:scan 2.2s ease-in-out infinite;pointer-events:none}
@@ -314,7 +315,7 @@ footer b{color:var(--green-900)}
             <button class="btn btn-gold" id="btnFaceCapture" disabled>😊 Capture &amp; Verify Face</button>
             <button class="btn btn-ghost" id="btnFaceStop" disabled>Stop</button>
           </div>
-          <p class="small" style="margin-top:10px">Face Detection uses on-device AI when available (face-api.js). If the AI model cannot load, the system falls back to secure face-photo matching — your enrolled photo is compared with the live capture. Demo users without a photo can confirm with the ID + PIN method.</p>
+          <p class="small" style="margin-top:10px"><b>For a match:</b> stand ~40 cm from the phone, face the screen, fill the oval, even daylight (not a window behind you). Capture only when the badge says <b>Face: detected</b>. If it still fails, use QR or ID + PIN &mdash; those always work.</p>
           <div id="facePreviewBox"></div>
           <div class="result" id="faceResult"></div>
         </div>
@@ -360,6 +361,7 @@ footer b{color:var(--green-900)}
               <select id="thumbUserSelect"></select>
             </div>
           </div>
+          <p class="small" style="margin-top:10px">Fingerprint only works on the <b>same phone</b> that enrolled it, in Chrome, with a fingerprint already set in the phone settings. Hold until the phone popup appears, then confirm. If this phone never enrolled that person, use People → Edit → Bind fingerprint — or clock with QR / PIN.</p>
           <div class="result" id="thumbResult"></div>
         </div>
 
@@ -749,21 +751,40 @@ document.querySelectorAll('.method-btn').forEach(btn=>{
 
 /* ---------- CAMERA HELPERS ---------- */
 let faceStream=null, qrStream=null, regStream=null, faceRaf=null, qrRaf=null, regRaf=null;
-async function getCam(videoEl){
-  if(!navigator.mediaDevices?.getUserMedia) throw new Error('Camera API not available. Use HTTPS or localhost, or use ID + PIN / manual QR entry.');
-  return await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+async function getCam(videoEl, facing){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw new Error('Camera API not available. Use HTTPS or localhost, or use ID + PIN / manual QR entry.');
+  const mode=facing||'user';
+  try{
+    return await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:mode},width:{ideal:1280},height:{ideal:720}},audio:false});
+  }catch(e){
+    return await navigator.mediaDevices.getUserMedia({video:{facingMode:mode},audio:false});
+  }
 }
 function stopStream(stream,videoEl){ if(stream){ stream.getTracks().forEach(t=>t.stop()); } if(videoEl){ videoEl.srcObject=null; } }
 
 /* ---------- FACE: DETECTION + MATCHING ---------- */
-let faceApiReady=false, faceApiFailed=false;
+let faceApiReady=false, faceApiFailed=false, faceApiDetect=false;
+function faceOpts(){ return new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.3}); }
 async function initFaceApi(){
   try{
     if(typeof faceapi==='undefined') throw new Error('face-api not loaded');
-    const base='https://justadudewhohacks.github.io/face-api.js/models';
-    await faceapi.nets.tinyFaceDetector.loadFromUri(base);
-    await faceapi.nets.faceRecognitionNet.loadFromUri(base);
-    faceApiReady=true; $('faceEngineStatus').textContent='AI Ready ✓';
+    const bases=['models','./models','https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'];
+    let last=null;
+    for(const base of bases){
+      try{
+        await faceapi.nets.tinyFaceDetector.loadFromUri(base);
+        faceApiDetect=true;
+        try{
+          await faceapi.nets.faceLandmark68TinyNet.loadFromUri(base);
+          await faceapi.nets.faceRecognitionNet.loadFromUri(base);
+          faceApiReady=true;
+        }catch(e2){ last=e2; }
+        break;
+      }catch(e){ last=e; }
+    }
+    if(faceApiReady) $('faceEngineStatus').textContent='AI Ready ✓';
+    else if(faceApiDetect) $('faceEngineStatus').textContent='Detector ready';
+    else { faceApiFailed=true; $('faceEngineStatus').textContent='Photo-Match Mode'; if(last) console.warn('face-api',last); }
   }catch(e){ faceApiFailed=true; $('faceEngineStatus').textContent='Photo-Match Mode'; }
 }
 initFaceApi();
@@ -772,7 +793,7 @@ async function detectLoop(videoEl, badgeEl, scanEl){
   if(!videoEl.videoWidth) return;
   try{
     if(faceApiReady && typeof faceapi!=='undefined'){
-      const det=await faceapi.detectSingleFace(videoEl,new faceapi.TinyFaceDetectorOptions());
+      const det=await faceapi.detectSingleFace(videoEl,faceOpts());
       if(det){ badgeEl.textContent='Face: detected ✓'; badgeEl.style.background='#15803d'; }
       else { badgeEl.textContent='Face: not found — center your face'; badgeEl.style.background='rgba(0,0,0,.6)'; }
     } else {
@@ -791,29 +812,55 @@ function startDetectLoop(videoEl,badgeEl,scanEl,rafRef){
   const loop=async()=>{ await detectLoop(videoEl,badgeEl,scanEl); rafRef.id=requestAnimationFrame(loop); };
   loop();
 }
-function faceHistogram(imgDataUrl){
-  return new Promise(res=>{
-    const img=new Image(); img.onload=()=>{
-      const c=document.createElement('canvas'); c.width=32;c.height=32; const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,32,32);
-      const d=ctx.getImageData(0,0,32,32).data; const hist=new Array(12).fill(0); let sum=0;
-      for(let i=0;i<d.length;i+=4){ const r=d[i],g=d[i+1],b=d[i+2]; hist[Math.floor(r/64)]++; hist[4+Math.floor(g/64)]++; hist[8+Math.floor(b/64)]++; sum+=r+g+b; }
-      res({hist,avg:sum/(d.length/4*3)});
-    }; img.src=imgDataUrl;
-  });
+function loadImg(url){
+  return new Promise(function(res,rej){ const img=new Image(); img.onload=function(){res(img);}; img.onerror=rej; img.src=url; });
 }
-async function faceSimilarity(a,b){
-  const ha=await faceHistogram(a), hb=await faceHistogram(b);
-  let diff=0; for(let i=0;i<12;i++) diff+=Math.abs(ha.hist[i]-hb.hist[i]);
-  const avgDiff=Math.abs(ha.avg-hb.avg)/255;
-  const score=Math.max(0, 100 - (diff/ (32*32) *120) - avgDiff*40);
-  return Math.round(score);
+function gridFeatures(img){
+  const c=document.createElement('canvas'); c.width=64; c.height=64; const ctx=c.getContext('2d');
+  const s=Math.min(img.naturalWidth||img.width, img.naturalHeight||img.height)*0.72;
+  const sx=((img.naturalWidth||img.width)-s)/2, sy=((img.naturalHeight||img.height)-s)/2;
+  ctx.drawImage(img,sx,sy,s,s,0,0,64,64);
+  const d=ctx.getImageData(0,0,64,64).data;
+  const lum=new Float32Array(64*64); let mean=0;
+  for(let i=0,p=0;i<d.length;i+=4,p++){ const y=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; lum[p]=y; mean+=y; }
+  mean/=lum.length;
+  let v=0; for(let i=0;i<lum.length;i++){ lum[i]-=mean; v+=lum[i]*lum[i]; }
+  const sd=Math.sqrt(v/lum.length)||1;
+  for(let i=0;i<lum.length;i++) lum[i]/=sd;
+  const cells=new Float32Array(64);
+  for(let y=0;y<8;y++) for(let x=0;x<8;x++){
+    let sm=0; for(let dy=0;dy<8;dy++) for(let dx=0;dx<8;dx++) sm+=lum[(y*8+dy)*64+(x*8+dx)];
+    cells[y*8+x]=sm/64;
+  }
+  return {lum,cells};
 }
+function corr(a,b){ let s=0; for(let i=0;i<a.length;i++) s+=a[i]*b[i]; return s/a.length; }
+async function photoSimilarity(a,b){
+  try{
+    const ia=await loadImg(a), ib=await loadImg(b);
+    const fa=gridFeatures(ia), fb=gridFeatures(ib);
+    const c1=(corr(fa.lum,fb.lum)+1)*50;
+    const c2=(corr(fa.cells,fb.cells)+1)*50;
+    return Math.round(Math.max(0, Math.min(100, 0.7*c1+0.3*c2)));
+  }catch(e){ return 0; }
+}
+async function aiDescriptor(src){
+  if(!faceApiReady) return null;
+  try{
+    let input=src;
+    if(typeof src==='string') input=await loadImg(src);
+    const det=await faceapi.detectSingleFace(input,faceOpts()).withFaceLandmarks(true).withFaceDescriptor();
+    return det && det.descriptor ? det.descriptor : null;
+  }catch(e){ return null; }
+}
+function descScore(d){ return Math.round(Math.max(0, Math.min(100, (1-(d/0.78))*100))); }
+async function faceSimilarity(a,b){ return photoSimilarity(a,b); }
 function capturePhoto(videoEl){
   const c=document.createElement('canvas'); const w=videoEl.videoWidth||640,h=videoEl.videoHeight||480;
-  c.width=320;c.height=320; const ctx=c.getContext('2d');
-  const side=Math.min(w,h)*0.62; const sx=(w-side)/2, sy=(h-side)/2;
-  ctx.drawImage(videoEl,sx,sy,side,side,0,0,320,320);
-  return c.toDataURL('image/jpeg',0.82);
+  c.width=360;c.height=360; const ctx=c.getContext('2d');
+  const side=Math.min(w,h)*0.72; const sx=(w-side)/2, sy=(h-side)/2;
+  ctx.drawImage(videoEl,sx,sy,side,side,0,0,360,360);
+  return c.toDataURL('image/jpeg',0.88);
 }
 
 /* Face terminal */
@@ -837,16 +884,30 @@ $('btnFaceCapture').addEventListener('click',async()=>{
     showResultOne('faceResult','info','No face enrollments','Please register a face photo first (Register tab), or use QR / ID + PIN for demo users.');
     return;
   }
-  let best=null,bestScore=-1;
-  for(const u of users){ const s=await faceSimilarity(photo,u.faceThumb); if(s>bestScore){bestScore=s;best=u;} }
-  $('faceMatchLine').innerHTML=`Best match: <b>${esc(best.name)}</b> — confidence <span class="conf">${bestScore}%</span>`;
-  if(bestScore>=55){ doClock(best.id,'Face'); }
-  else { beep(false); showResultOne('faceResult','err','Face not recognized',`Confidence ${bestScore}% is too low. Try better lighting, or use QR / ID + PIN.`); }
+  const liveDesc=await aiDescriptor(photo);
+  let best=null,bestScore=-1,second=-1,usedAi=!!liveDesc;
+  for(const u of users){
+    let score=0;
+    if(liveDesc && u.faceThumb){
+      const d=await aiDescriptor(u.faceThumb);
+      if(d){ const dist=faceapi.euclideanDistance(liveDesc,d); score=descScore(dist); }
+      else score=await photoSimilarity(photo,u.faceThumb);
+    } else {
+      score=await photoSimilarity(photo,u.faceThumb);
+    }
+    if(score>bestScore){ second=bestScore; bestScore=score; best=u; }
+    else if(score>second) second=score;
+  }
+  $('faceMatchLine').innerHTML=`Best match: <b>${esc(best.name)}</b> — confidence <span class="conf">${bestScore}%</span>`+(usedAi?' <span class="small">(AI)</span>':'');
+  const gap=bestScore-Math.max(0,second);
+  const pass= usedAi ? (bestScore>=46 && (users.length<2 || gap>=4)) : (bestScore>=56 && (users.length<2 || gap>=5));
+  if(pass){ doClock(best.id,'Face'); }
+  else { beep(false); showResultOne('faceResult','err','Face not recognized','Confidence '+bestScore+'% is too low'+(gap>=0 && users.length>1?' (too close to another person)':'')+'. Face the light, fill the oval, then try again — or use QR / ID + PIN.'); }
 });
 
 /* ---------- QR SCAN ---------- */
 $('btnQrStart').addEventListener('click',async()=>{
-  try{ qrStream=await getCam($('qrVideo')); $('qrVideo').srcObject=qrStream; await $('qrVideo').play();
+  try{ qrStream=await getCam($('qrVideo'),'environment'); $('qrVideo').srcObject=qrStream; await $('qrVideo').play();
     $('qrCamBadge').textContent='📷 Scanner on'; $('btnQrStart').disabled=true; $('btnQrStop').disabled=false; $('qrScanline').style.display='block';
     const tickQr=()=>{
       if(!qrStream) return;
@@ -924,7 +985,7 @@ async function bioEnrol(displayName){
       rp:{name:BIO_RP,id:(location.hostname||'localhost')},
       user:{id:uid,name:nm,displayName:nm},
       pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
-      authenticatorSelection:{userVerification:'required',residentKey:'preferred',requireResidentKey:false},
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred',requireResidentKey:false},
       timeout:60000,
       attestation:'none'
     }});
@@ -938,7 +999,7 @@ async function bioVerify(credIdB64){
     const allow=credIdB64? [{type:'public-key',id:unb64u(credIdB64),transports:['internal','hybrid','usb','nfc','ble']}] : [];
     const cred=await navigator.credentials.get({publicKey:{
       challenge:ch, rpId:(location.hostname||'localhost'),
-      allowCredentials:allow, userVerification:'required', timeout:60000
+      allowCredentials:allow, userVerification:'required', timeout:90000
     }});
     if(!cred) return {ok:false,reason:'cancelled'};
     const got=b64u(cred.rawId);
@@ -983,9 +1044,11 @@ holdToScan($('fingerBtn'),$('fingerFill'),$('thumbBar'),$('thumbStatus'),async()
   if(!res.ok){
     beep(false);
     status.textContent=(res.reason==='cancelled')?'Not verified - no clock-in':'Fingerprint did not match';
-    let why='Verification failed or was cancelled.';
+    let why='Verification failed or was cancelled. Use the SAME finger, on the SAME phone that enrolled it.';
+    if(res.reason==='cancelled') why='The phone cancelled the prompt. Unlock the screen, then hold again and accept the fingerprint popup.';
     if(res.reason==='mismatch') why='That fingerprint belongs to a different enrolment.';
-    if(res.reason==='unknown-credential') why='This fingerprint is not the one enrolled here.';
+    if(res.reason==='unknown-credential') why='This phone is not the one that enrolled the fingerprint. Re-enrol on THIS phone: People tab → Edit → Bind fingerprint. Or use QR / ID + PIN.';
+    if(res.reason==='failed') why='The sensor did not accept the finger. Dry the finger, use the enrolled finger, Chrome (not WhatsApp/Instagram in-app browser), then try again.';
     showResultOne('thumbResult','err','Fingerprint not verified',why+' Nothing was recorded.');
     return;
   }
